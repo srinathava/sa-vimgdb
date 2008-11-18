@@ -3,6 +3,7 @@ import socket
 import pty, tty, select, os, sys
 import re
 import time
+from sockutils import *
 
 class ReaderThread(Thread):
     def __init__(self, server, cmd):
@@ -27,7 +28,9 @@ class GdbServer:
 
     def closeConnection(self, reason):
         if self.conn:
-            self.conn.send(reason + '\n')
+            sendData(self.conn, reason+'\n')
+
+            # print 'Server shutting down connection'
             self.conn.shutdown(2)
             self.conn.close()
             del self.conn
@@ -175,7 +178,7 @@ class GdbServer:
     def onNewData(self, data):
         # sys.stdout.write(data)
         if self.conn:
-            self.conn.send(data)
+            sendData(self.conn, data)
 
         self.newDataTotal += data
         m = self.queryPat.search(self.newDataTotal)

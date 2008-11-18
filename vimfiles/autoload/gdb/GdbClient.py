@@ -1,6 +1,7 @@
 # Echo client program
 import socket
 import sys
+from sockutils import *
 
 def get_reply(input):
     HOST = '127.0.0.1'                 # The remote host
@@ -8,14 +9,14 @@ def get_reply(input):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((HOST, PORT))
 
-    s.send(input)
+    
+    sendData(s, input)
     while 1:
-        try:
-            data = s.recv(1024)
-            if not data:
-                break
-        except:
+        data = s.recv(1024)
+        if not data:
             break
+
+        sys.stdout.write(data)
 
     print 'shutting down/closing socket...'
     s.shutdown(2)

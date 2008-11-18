@@ -8,6 +8,3 @@ def sendData(conn, data):
             raise RuntimeError, "Socket connection broken by client!"
         total_sent += sent
 
-def recvData(conn, data):
-
-

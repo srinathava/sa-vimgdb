@@ -65,6 +65,7 @@ function! s:GdbInitWork( )
 
     " python from VimGdbServer import startVimServerThread
     " exec 'python startVimServerThread("'.v:servername.'")'
+    " !sleep 0.4
 
     python from VimGdbClient import VimGdbClient
     exec 'python gdbClient = VimGdbClient('.s:GdbCmdWinBufNum.')'

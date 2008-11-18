@@ -2,6 +2,7 @@ import socket
 import sys
 import vim
 import re
+from sockutils import *
 
 class VimGdbClient:
     def __init__(self, bufno):
@@ -20,17 +21,15 @@ class VimGdbClient:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((HOST, PORT))
 
-        self.socket.send(input)
+        sendData(self.socket, input)
         while 1:
-            try:
-                data = self.socket.recv(1024)
-                if not data:
-                    break
-            except:
+            data = self.socket.recv(1024)
+            if not data:
                 break
 
             self.onNewData(data)
 
+        # print 'Client shutting down connection'
         self.socket.shutdown(2)
         self.socket.close()
         del self.socket
@@ -77,7 +76,7 @@ class VimGdbClient:
                 query = m.group('query')
                 reply = self.getQueryAnswer(query)
                 self.newDataTotal = re.sub(self.queryPat, '', self.newDataTotal)
-                self.socket.send(reply)
+                sendData(self.socket, reply)
 
         if self.updateWindow:
             self.printNewData(data)
