@@ -1,6 +1,8 @@
 from GdbServer import GdbServer
 import os
 import sys
+from threading import Thread
+import commands
 
 class VimGdbServer(GdbServer):
     def __init__(self, vimServerName):
@@ -9,8 +11,22 @@ class VimGdbServer(GdbServer):
 
     def onResume(self):
         cmd = "vim --servername %s --remote-expr 'gdb#gdb#OnResume()'" % self.vimServerName
-        print 'Executing [%s]' % cmd
-        os.system(cmd)
+        commands.getoutput(cmd)
+
+class VimServerThread(Thread):
+    def __init__(self, vimServerName):
+        Thread.__init__(self)
+        self.server = VimGdbServer(vimServerName)
+
+    def run(self):
+        self.server.run()
+
+def startVimServerThread(serverName):
+    import time
+    s = VimServerThread(serverName)
+    s.start()
+    # wait a bit for the server to start serving.
+    time.sleep(0.1)
 
 if __name__ == '__main__':
     s = VimGdbServer(sys.argv[1])

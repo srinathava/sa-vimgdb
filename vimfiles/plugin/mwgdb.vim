@@ -25,17 +25,17 @@ import os, commands, re, vim, time
 def startMatlabInXterm(nojvm):
     if nojvm:
         pid = os.spawnlp(os.P_NOWAIT, 'xterm', 'xterm', '-e', 'matlab', '-nojvm')
+        # wait for the correct MATLAB process to be loaded.
+        while 1:
+            pst = commands.getoutput('pstree -p %d' % pid)
+            m = re.search(r'MATLAB\((\d+)\)', pst)
+            if m:
+                pid = m.group(1)
+                break
+            time.sleep(0.5)
     else:
-        pid = os.spawnlp(os.P_NOWAIT, 'xterm', 'xterm', '-e', 'matlab')
+        pid = os.spawnlp(os.P_NOWAIT, 'matlab')
 
-    # wait for the correct MATLAB process to be loaded.
-    while 1:
-        pst = commands.getoutput('pstree -p %d' % pid)
-        m = re.search(r'MATLAB\((\d+)\)', pst)
-        if m:
-            pid = m.group(1)
-            break
-        time.sleep(0.5)
     vim.command('let pid = %s' % pid)
 FOOBAR
 

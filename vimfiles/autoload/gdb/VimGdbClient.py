@@ -15,7 +15,7 @@ class VimGdbClient:
         self.queryAnswer = None
 
     def getReply(self, input):
-        HOST = '127.0.0.1'                 # The remote host
+        HOST = '127.0.0.1'        # The remote host
         PORT = 50007              # The same port as used by the server
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((HOST, PORT))

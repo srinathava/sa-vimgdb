@@ -56,12 +56,16 @@ function! s:GdbInitWork( )
     setlocal filetype=gdbvim
 
     " Start the GDBMI server...
-    " exec '!python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
+    " exec '!python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' > /dev/null &'
     exec '!xterm -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
     exec '!sleep 0.4'
 
     python import sys
     exec 'python sys.path += [r"'.s:scriptDir.'"]'
+
+    " python from VimGdbServer import startVimServerThread
+    " exec 'python startVimServerThread("'.v:servername.'")'
+
     python from VimGdbClient import VimGdbClient
     exec 'python gdbClient = VimGdbClient('.s:GdbCmdWinBufNum.')'
 
@@ -222,15 +226,23 @@ function! gdb#gdb#OnResume()
     " This function gets called when the background GDB process regains
     " control and is ready to process commands once again. We should
     " probably just go to the current frame when this happens.
-    call Debug('+gdb#gdb#OnResume', 'gdb')
+    " call Debug('+gdb#gdb#OnResume', 'gdb')
 
     set balloonexpr=gdb#gdb#BalloonExpr()
 
     " We want to make sure that the command window shows the latest stuff
     " when we are given control. Too bad if the user is busy typing
     " something while this is going on.
-    call gdb#gdb#UpdateCmdWin()
+    " call gdb#gdb#UpdateCmdWin()
     call gdb#gdb#GotoCurFrame()
+
+    let pos = getpos('.')
+    let bufnum = bufnr('%')
+    call gdb#gdb#ShowStack()
+    exec bufwinnr(bufnum).' wincmd w'
+    call setpos('.', pos)
+
+    redraw
 endfunction " }}}
 " gdb#gdb#GetQueryAnswer:  {{{
 " Description: 
@@ -363,10 +375,10 @@ endfunction " }}}
 function! gdb#gdb#RunOrResume(arg)
     if a:arg =~ '^start$'
         call gdb#gdb#Init()
-    elseif a:arg =~ '^\(set\|handle\|info\|at\%[tach]\)'
-        call gdb#gdb#RunCommand(a:arg)
-    elseif a:arg =~ '^\(run\|re\%[turn]\|co\%[ntinue]\|fi\%[nish]\|st\%[epi]\|ne\%[xti]\|\)'
+    elseif a:arg =~ '^\(run\|re\%[turn]\|co\%[ntinue]\|fi\%[nish]\|st\%[epi]\|ne\%[xti]\)'
         call gdb#gdb#ResumeProgram(a:arg)
+    else
+        call gdb#gdb#RunCommand(a:arg)
     endif
 endfunction " }}}
 " gdb#gdb#SetQueryAnswer: sets an answer for future queries {{{
@@ -448,14 +460,14 @@ function! gdb#gdb#ShowStack()
     let s:GdbStackWinBufNum = s:GdbOpenWindow(s:GdbStackWinName)
     " remove original stuff.
     % d _
-    let stack = s:GdbGetCommandOutputSilent('bt')
+    let stack = s:GdbGetCommandOutputSilent('bt 10')
     for txt in split(stack, '[\n\r]')
         if txt !~ '' && txt =~ '\S'
             call append(line('$'), txt)
         endif
     endfor
     " delete the first and last lines
-    1 d _
+    1,2 d _
     $ d _
 
     setlocal nowrap

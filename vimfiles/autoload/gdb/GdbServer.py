@@ -97,14 +97,14 @@ class GdbServer:
 
         # Done main server loop... Do cleanup...
         if self.reader and self.reader.isAlive():
-            print 'Closing child reader threads...'
+            # print 'Closing child reader threads...'
             self.stopReading = True
             self.reader.join()
             self.reader = None
             self.stopReading = False
 
         if self.pid:
-            print 'Killing GDB process...'
+            # print 'Killing GDB process...'
             os.kill(self.pid, 9)
             self.pid = 0
             
@@ -173,7 +173,7 @@ class GdbServer:
         return retval
 
     def onNewData(self, data):
-        sys.stdout.write(data)
+        # sys.stdout.write(data)
         if self.conn:
             self.conn.send(data)
 
@@ -190,8 +190,9 @@ class GdbServer:
         t.start()
 
     def waitForReaderToBeDone(self):
-        self.reader.join()
-        self.onResume()
+        if self.reader:
+            self.reader.join()
+            self.onResume()
 
     def onResume(self):
         pass
