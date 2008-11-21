@@ -15,6 +15,7 @@ if has('gui_running')
     amenu &Gdb.&Down\ Stack             :call gdb#gdb#FrameDown()<CR>
     amenu &Gdb.&Goto\ Frame             :call gdb#gdb#FrameN(-1)<CR>
     amenu &Gdb.Show\ Stack              :call gdb#gdb#ShowStack()<CR>
+    amenu &Gdb.Expand\ Full\ Stack      :call gdb#gdb#ExpandStack(9999)<CR>
     amenu &Gdb.Goto\ Current\ Frame     :call gdb#gdb#GotoCurFrame()<CR>
 
     amenu &Gdb.-sep01-      <Nop>
@@ -39,7 +40,8 @@ if has('gui_running')
     amenu &Gdb.Ignore\ SIGSEGV :call gdb#gdb#RunCommand('handle SIGSEGV nostop noprint')<CR>
 
     amenu 80.5 PopUp.Run\ to\ cursor\ (GDB) :call gdb#gdb#Until()<CR>
-    amenu 80.6 PopUp.-sep-gdb0- <Nop>
+    amenu 80.6 PopUp.Examine\ Data\ (GDB)   :call gdb#gdb#AddGdbVar()<CR>
+    amenu 80.7 PopUp.-sep-gdb0- <Nop>
 endif
 
 com! -nargs=1 GDB :call gdb#gdb#RunOrResume(<q-args>)

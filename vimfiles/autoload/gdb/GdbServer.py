@@ -4,6 +4,7 @@ import pty, tty, select, os, sys
 import re
 import time
 from sockutils import *
+import traceback
 
 class ReaderThread(Thread):
     def __init__(self, server, cmd):
@@ -25,6 +26,16 @@ class GdbServer:
         self.conn = None
         self.stopReading = False
         self.newDataTotal = ''
+
+        self.logfile = '/tmp/gdbmi.log'
+
+    def printDebug(self, msg):
+        f = open(self.logfile, 'a')
+        print >> f, msg
+        f.close()
+
+    def printException(self, maxTBlevel=5):
+        traceback.print_exc(file=open(self.logfile, 'a'))
 
     def closeConnection(self, reason):
         if self.conn:
@@ -56,11 +67,15 @@ class GdbServer:
                 self.socket.listen(1)
                 self.conn, addr = self.socket.accept()
             except:
-                break
+                self.printDebug('Socket listening threw an exception!')
+                self.printException()
+                continue
 
             try:
                 data = self.conn.recv(1024)
             except:
+                self.printDebug('Socket accept threw an exception')
+                self.printException()
                 break
 
             tokens = data.split(' ', 1)
@@ -73,6 +88,7 @@ class GdbServer:
 
             # client wants us to go away...
             if mode == 'DIE':
+                self.printDebug('Client wants us to go away...')
                 break
 
             if mode == 'SETQA':
@@ -97,6 +113,7 @@ class GdbServer:
 
             self.closeConnection('')
 
+        self.printDebug('Done with main server loop...')
 
         # Done main server loop... Do cleanup...
         if self.reader and self.reader.isAlive():

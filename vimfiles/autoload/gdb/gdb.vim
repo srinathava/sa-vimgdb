@@ -23,7 +23,8 @@ function! gdb#gdb#Let(varName, value)
 endfunction " }}}
 call gdb#gdb#Let('GdbCmdWinName', '_GDB_Command_Window_')
 call gdb#gdb#Let('GdbStackWinName', '_GDB_Stack_Window_')
-call gdb#gdb#Let('GdbShowAsyncOutputWindow', 1)
+call gdb#gdb#Let('GdbVarWinName', '_GDB_Variables_Window')
+call gdb#gdb#Let('GdbShowAsyncOutputWindow', 0)
 
 " ==============================================================================
 " Script local variables
@@ -34,6 +35,7 @@ let s:scriptDir = expand('<sfile>:p:h')
 
 let s:GdbCmdWinName = g:GdbCmdWinName
 let s:GdbStackWinName = g:GdbStackWinName
+let s:GdbVarWinName = g:GdbVarWinName
 
 let s:GdbCmdWinBufNum = -1
 let s:GdbStackWinBufNum = -1
@@ -46,7 +48,7 @@ function! s:GdbInitWork( )
     " Cannot start multiple GDB sessions from a single VIM session.
     if s:gdbStarted == 1
         echohl Search
-        echomsg "Gdb is busy. Interrupt the program or try again later."
+        echomsg "Gdb is already started!"
         echohl None
         return
     endif
@@ -55,17 +57,19 @@ function! s:GdbInitWork( )
     let s:GdbCmdWinBufNum = s:GdbOpenWindow(s:GdbCmdWinName)
     setlocal filetype=gdbvim
 
-    " Start the GDBMI server...
-    " exec '!python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' > /dev/null &'
-    exec '!xterm -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
-    exec '!sleep 0.4'
-
     python import sys
     exec 'python sys.path += [r"'.s:scriptDir.'"]'
 
-    " python from VimGdbServer import startVimServerThread
-    " exec 'python startVimServerThread("'.v:servername.'")'
-    " !sleep 0.4
+    " Start the GDBMI server...
+    " We have a choice here... We can either start a separate xterm which
+    " shows the contents
+    if g:GdbShowAsyncOutputWindow
+        exec '!xterm -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
+    else
+        python from VimGdbServer import startVimServerThread
+        exec 'python startVimServerThread("'.v:servername.'")'
+    endif
+    exec '!sleep 0.4'
 
     python from VimGdbClient import VimGdbClient
     exec 'python gdbClient = VimGdbClient('.s:GdbCmdWinBufNum.')'
@@ -103,7 +107,12 @@ function! gdb#gdb#Init()
     keepalt call s:GdbInitWork()
 endfunction " }}}
 " s:GdbOpenWindow: opens one of the GDB windows {{{
+" Description: Open a new GDB window with the given name. We first attempt to
+" see if any GDB window is currently open. If there is one, then we will
+" vertically split a new window from it. Otherwise we horizontally split a new
+" window at the very top of the window.
 
+" We use a map with a constant value of 1 to simulate a set.
 let s:gdbBufNums = {}
 function! s:GdbOpenWindow(bufName)
     let bufnum = bufnr(a:bufName, 1)
@@ -124,6 +133,7 @@ function! s:GdbOpenWindow(bufName)
         endfor
         if winnum == -1
             exec 'top split #'.bufnum
+            resize 10
         endif
     endif
 
@@ -132,8 +142,14 @@ function! s:GdbOpenWindow(bufName)
     call setbufvar(bufnum, '&buftype', 'nofile')
     call setbufvar(bufnum, '&ts', 8)
 
-    resize 10
     return bufnum
+endfunction " }}}
+" s:CloseAllGdbWindows: closes all open GDB windows {{{
+" Description: 
+function! s:CloseAllGdbWindows()
+    for n in keys(s:gdbBufNums)
+        exec 'bdelete '.n
+    endfor
 endfunction " }}}
 " s:CreateMap: creates a map safely {{{
 " Description: 
@@ -239,7 +255,10 @@ function! gdb#gdb#OnResume()
 
     let pos = getpos('.')
     let bufnum = bufnr('%')
-    call gdb#gdb#ShowStack()
+
+    call gdb#gdb#RefreshStack()
+    call gdb#gdb#RefreshGdbVars()
+
     exec bufwinnr(bufnum).' wincmd w'
     call setpos('.', pos)
 
@@ -297,6 +316,7 @@ function! gdb#gdb#Terminate()
     if s:gdbStarted == 1
         python gdbClient.terminate()
         call s:RestoreUserMaps()
+        call s:CloseAllGdbWindows()
         let s:gdbStarted = 0
     end
 endfunction " }}}
@@ -441,11 +461,8 @@ function! gdb#gdb#FrameN(frameNum)
     call s:GdbGetCommandOutputSilent('frame '.frameNum)
     call gdb#gdb#GotoCurFrame()
 endfunction " }}}
-" gdb#gdb#ShowStack: shows current GDB stack {{{
-" Description:  
-
-" GotoSelectedFrame: goes to the selected frame {{{
-function! <SID>GotoSelectedFrame()
+" gdb#gdb#GotoSelectedFrame: goes to the selected frame {{{
+function! gdb#gdb#GotoSelectedFrame()
     let frameNum = matchstr(getline('.'), '\d\+')
     if frameNum != ''
         call gdb#gdb#FrameN(frameNum)
@@ -453,6 +470,14 @@ function! <SID>GotoSelectedFrame()
         call gdb#gdb#FrameN(-1)
     endif
 endfunction " }}}
+" gdb#gdb#ExpandStack:  {{{
+" Description: 
+function! gdb#gdb#ExpandStack(numFrames)
+    exec 'python gdbClient.expandStack('.a:numFrames.')'
+endfunction " }}}
+" gdb#gdb#ShowStack: shows current GDB stack {{{
+" Description:  
+
 function! gdb#gdb#ShowStack()
     if s:GdbWarnIfBusy()
         return
@@ -461,20 +486,23 @@ function! gdb#gdb#ShowStack()
     let s:GdbStackWinBufNum = s:GdbOpenWindow(s:GdbStackWinName)
     " remove original stuff.
     % d _
-    let stack = s:GdbGetCommandOutputSilent('bt 10')
-    for txt in split(stack, '[\n\r]')
-        if txt !~ '' && txt =~ '\S'
-            call append(line('$'), txt)
-        endif
-    endfor
-    " delete the first and last lines
-    1,2 d _
-    $ d _
+    python gdbClient.expandStack(10)
+    " Remove all empty lines.
+    g/^\s*$/d_
 
     setlocal nowrap
 
     " set up a local map to go to the required frame.
-    exec "nmap <buffer> <silent> <CR> :call \<SID>GotoSelectedFrame()<CR>"
+    exec "nmap <buffer> <silent> <CR> :call gdb#gdb#GotoSelectedFrame()<CR>"
+    exec "nmap <buffer> <silent> <tab> :call gdb#gdb#ExpandStack(10)<CR>"
+    exec "nmap <buffer> <silent> <C-tab> :call gdb#gdb#ExpandStack(9999)<CR>"
+endfunction " }}}
+" gdb#gdb#RefreshStack: refreshes stack trace shown {{{
+" Description: 
+function! gdb#gdb#RefreshStack()
+    if bufwinnr(s:GdbStackWinBufNum) != -1
+        call gdb#gdb#ShowStack()
+    endif
 endfunction " }}}
 
 " ==============================================================================
@@ -596,14 +624,14 @@ function! s:GetPidFromName(name)
     let ps = system('ps -u '.$USER.' | grep '.a:name)
     if ps == ''
         echohl ErrorMsg
-        echo "No running go process found"
+        echo "No running '".a:name."' process found"
         echohl NOne
         return ''
     end
 
     if ps =~ '\n\s*\d\+'
         echohl ErrorMsg
-        echo "Too many running processes. Don't know which to attach to."
+        echo "Too many running '".a:name."' processes. Don't know which to attach to. Use a PID"
         echohl None
         return ''
     end
@@ -613,14 +641,18 @@ function! gdb#gdb#Attach(pid)
     let pid = a:pid
     if pid == ''
         let input = input('Enter the PID or process name to attach to :')
-        if input =~ '^\d+$'
+        if input =~ '^\d\+$'
             let pid = input
         else
             let pid = s:GetPidFromName(input)
-            if pid == ''
-                return
-            end
         endif
+    endif
+    if pid !~ '^\d\+$'
+        return
+    end
+    echomsg 'Attaching to PID "'.pid.'"'
+    if s:gdbStarted == 0
+        call s:GdbInitWork()
     endif
     call gdb#gdb#RunCommand('attach '.pid)
 endfunction " }}}
@@ -740,6 +772,88 @@ function! s:GetContingString(bufnr, lnum, col)
 
     let matchtxt = pretxt.posttxt
     return matchtxt
+endfunction " }}}
+
+" ==============================================================================
+" Variable watching and expansion
+" ============================================================================== 
+" gdb#gdb#AddGdbVar: adds a GDB variable {{{
+" Description: 
+
+" gdb#gdb#OpenGdbVarsWindow:  {{{
+" Description: 
+let s:GdbVarWinBufNum = -1
+function! gdb#gdb#OpenGdbVarsWindow()
+    let redoMaps = (bufwinnr(s:GdbVarWinName) == -1)
+    
+    let s:GdbVarWinBufNum = s:GdbOpenWindow(s:GdbVarWinName)
+
+    if redoMaps
+        0 put='# Press <tab> to expand/collapse the hierarchy'
+        $ d _
+
+        nmap <buffer> <silent> <tab> :call gdb#gdb#ToggleGdbVar()<CR>
+        setlocal ft=gdbvars
+    endif
+
+endfunction " }}}
+function! gdb#gdb#AddGdbVar()
+    if s:GdbWarnIfBusy()
+        return
+    endif
+
+    let expr = s:GetContingString(bufnr('%'), line('.'), col('.'))
+
+    call gdb#gdb#OpenGdbVarsWindow()
+
+    exec 'python gdbClient.addGdbVar("'.expr.'")'
+endfunction " }}}
+" gdb#gdb#ExpandGdbVar:  {{{
+" Description: 
+function! gdb#gdb#ExpandGdbVar()
+    python gdbClient.expandGdbVar()
+endfunction " }}}
+" gdb#gdb#CollapseGdbVar:  {{{
+" Description: 
+function! gdb#gdb#CollapseGdbVar()
+    python gdbClient.collapseGdbVar()
+
+    " Now remove all lines beneath this one with greater indentation that
+    " this one. This basically collapses the tree beneath this one.
+    let curLine = line('.')
+    let lastLine = line('$')
+    let curInd = strlen(matchstr(getline('.'), '^\s*'))
+    while 1
+        let nextInd = strlen(matchstr(getline(curLine + 1), '^\s*'))
+        if nextInd <= curInd
+            break
+        endif
+        exec (curLine+1).' d _'
+    endwhile
+
+endfunction " }}}
+" gdb#gdb#ToggleGdbVar:  {{{
+" Description: 
+function! gdb#gdb#ToggleGdbVar()
+    if s:GdbWarnIfBusy()
+        return
+    endif
+
+    if matchstr(getline('.'), '^\s*-') != ''
+        call gdb#gdb#CollapseGdbVar()
+    elseif matchstr(getline('.'), '^\s*+') != ''
+        call gdb#gdb#ExpandGdbVar()
+    endif
+endfunction " }}}
+" gdb#gdb#RefreshGdbVars:  {{{
+" Description: 
+function! gdb#gdb#RefreshGdbVars()
+    if bufwinnr(s:GdbVarWinBufNum) != -1
+        call gdb#gdb#OpenGdbVarsWindow()
+        " remove all previous notifications.
+        %s/^[^#]/ /
+        python gdbClient.refreshGdbVars()
+    endif
 endfunction " }}}
 
 " ==============================================================================

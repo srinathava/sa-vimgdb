@@ -61,8 +61,8 @@ function! StartMatlabDesktop()
     call gdb#gdb#RedoAllBreakpoints()
     call gdb#gdb#Continue()
 endfunction " }}}
-amenu &Mathworks.Start\ MATLAB\ -nojvm :call StartMatlabNoJvm()<CR>
-amenu &Mathworks.Start\ MATLAB\ desktop :call StartMatlabDesktop()<CR>
+amenu &Mathworks.Debug\ MATLAB\ -nojvm :call StartMatlabNoJvm()<CR>
+amenu &Mathworks.Debug\ MATLAB\ desktop :call StartMatlabDesktop()<CR>
 
 com! -nargs=1 SetMatlabCommand call SetMatlabCommandFcn(<q-args>)
 

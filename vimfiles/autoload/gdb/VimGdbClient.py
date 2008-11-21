@@ -3,6 +3,7 @@ import sys
 import vim
 import re
 from sockutils import *
+from GdbMiParser import parseGdbMi
 
 class VimGdbClient:
     def __init__(self, bufno):
@@ -104,19 +105,33 @@ class VimGdbClient:
             self.buffer.append(lines)
             vim.command('keepalt call gdb#gdb#ScrollCmdWin("%s")' % self.buffer.name)
 
-    def gotoCurrentFrame(self):
+    def getSilentMiOutput(self, cmd):
         self.updateWindow = False
-        out = self.runCommand('interpreter mi -stack-info-frame')
+        out = self.runCommand('interpreter mi "%s"' % cmd)
         self.updateWindow = True
 
-        filem = re.search('fullname="(.*?)"', out)
-        linem = re.search('line="(\d+)"', out)
-        if not filem or not linem:
+        # Get the first line after >>post-prompt which starts with \^
+        lines = out.splitlines()
+        for i in range(len(lines)):
+            if re.match('^\^', lines[i]):
+                return lines[i]
+
+        return ''
+
+    def getParsedGdbMiOutput(self, cmd):
+        return parseGdbMi(self.getSilentMiOutput(cmd))
+
+    def gotoCurrentFrame(self):
+        try:
+            out = self.getParsedGdbMiOutput('-stack-info-frame')
+            file = out.frame.fullname
+            line = out.frame.line
+            # ^done,frame={level="0",addr="0x00002aaab80758c5",func="cdr_transform_driver_pre_core",file="cdr/cdr_transform_driver.cpp",fullname="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/toolbox/stateflow/src/stateflow/cdr/cdr_transform_driver.cpp",line="263"}
+        except:
             return
 
-        file = filem.group(1)
-        lnum = int(linem.group(1))
-        vim.eval('gdb#gdb#PlaceSign("%s", %d)' % (file, lnum))
+
+        vim.eval('gdb#gdb#PlaceSign("%s", %d)' % (file, line))
 
     def isBusy(self):
         self.updateWindow = False
@@ -130,3 +145,130 @@ class VimGdbClient:
 
     def terminate(self):
         self.getReply('DIE')
+
+    def addGdbVar(self, expr):
+        try:
+            obj = self.getParsedGdbMiOutput('-var-create - @ %s' % expr)
+            # ^done,name="var1",numchild="1",type="class CG::Scope *"
+            name = obj.name
+            numchild = obj.numchild
+            type = obj.type
+        except:
+            return
+
+
+        if numchild > 0:
+            str = ' + '
+        else:
+            str = '   '
+
+        str += ('%s ' % expr)
+        str += (' {%s}' % name)
+
+        vim.current.buffer.append(str)
+        vim.command('redraw')
+
+    def expandGdbVar(self):
+        curLine = vim.current.line
+        m = re.search(r'^(\s*)\+.*{(\S+)}$', curLine)
+        if m:
+            curLine = re.sub(r'\+', '-', curLine, 1)
+            vim.current.line = curLine
+
+            lead_space = m.group(1)
+            varname = m.group(2)
+
+            obj = self.getParsedGdbMiOutput('-var-list-children 1 %s' % varname)
+            # ^done,numchild="1",children=[child={name="var1.CG_Scope",exp="CG_Scope",numchild="2",value="{...}",type="CG_Scope"}]
+            children = obj.children
+
+            lines = []
+            for ch in children:
+                child = ch.child
+
+                str = (lead_space + '  ')
+                if child.numchild > 0:
+                    str += '+ '
+                else:
+                    str += '  '
+
+                str += '%s <%s> {%s}' % (child.exp, child.value, child.name)
+
+                lines.append(str)
+
+            curLineNum = int(vim.eval('line(".")'))
+            vim.current.buffer[curLineNum:curLineNum] = lines
+
+    def collapseGdbVar(self):
+        curLine = vim.current.line
+        m = re.search(r'^(\s*)-.*{(\S+)}$', curLine)
+        if m:
+            curLine = re.sub(r'-', '+', curLine, 1)
+            vim.current.line = curLine
+
+            varname = m.group(2)
+            obj = self.getParsedGdbMiOutput('-var-delete -c %s' % varname)
+
+    def refreshGdbVars(self):
+        obj = self.getParsedGdbMiOutput('-var-update 1 *')
+        # ^done,changelist=[{name="var1.public.foo1",value="0x401018 \"hello world\"",in_scope="true",type_changed="false"},{name="var1.public.foo4",value="8",in_scope="true",type_changed="false"}]
+        
+        changelist = obj.changelist
+        for change in changelist:
+            varname = change.name
+            in_scope = change.in_scope
+            value = change.value
+            if in_scope == 'true':
+                vim.command(r'g/{%s}$/s/<.\{-}>/<%s>/' % (varname, value))
+                vim.command(r'g/{%s}$/s/^ /c/' % varname)
+            elif in_scope == 'false':
+                vim.command(r'g/{%s}$/s/^ /o/' % varname)
+            elif in_scope == 'invalid':
+                vim.command(r'g/{%s}$/d_' % varname)
+                self.getSilentMiOutput('-var-delete %s' % varname)
+
+    def expandStack(self, num, skipUnknownFrames=True):
+
+        isEmpty = len(vim.current.buffer) == 1 and vim.current.buffer[-1] == ''
+
+        lastShownFrame = 0
+        if not isEmpty:
+            m_last = re.search(r'last shown frame = (\d+)', vim.current.buffer[-1])
+            if m_last:
+                lastShownFrame = int(m_last.group(1))
+            else:
+                return
+
+        obj = self.getParsedGdbMiOutput('-stack-list-frames %d %d' % (lastShownFrame, lastShownFrame+num-1))
+        # ^done,stack=[frame={level="0",addr="0x0000000000400a1c",func="foo",file="vartest.cpp",fullname="/mathworks/home/savadhan/code/gdbmiserver/test/vartest.cpp",line="26"},frame={level="1",addr="0x0000000000400d01",func="main",file="vartest.cpp",fullname="/mathworks/home/savadhan/code/gdbmiserver/test/vartest.cpp",line="52"}]
+
+
+        lastIsKnown = isEmpty or (not re.match(r'...skipping', vim.current.buffer[-2]))
+
+        lines = []
+        for item in obj.stack:
+            frame = item.frame
+            if 'fullname' in frame.__dict__:
+                lines.append('#%-3d %s(...) at %s:%d' % (frame.level, frame.func, frame.fullname, frame.line))
+                lastIsKnown = True
+
+            else:
+                if skipUnknownFrames:
+                    if lastIsKnown:
+                        lines.append('...skipping frames with no source information...')
+
+                elif 'from' in frame.__dict__:
+                    lines.append('#%-3d ?? from ...%s' % (frame.level, frame.__dict__['from'][-20:]))
+
+                else:
+                    lines.append('#%-3d ??' % frame.level)
+
+                lastIsKnown = False
+
+        # remove the last line. We'll replace it with the updated lastShownFrame
+        vim.current.buffer[-1:] = []
+        if lines:
+            vim.current.buffer.append(lines)
+        if len(obj.stack) == num:
+            vim.current.buffer.append('" Press <tab> for more frames... (last shown frame = %d)' % (lastShownFrame + num - 1))
+
