@@ -1,4 +1,5 @@
 VIMFILES=${HOME}/.vim
+EXCLUDE="--exclude='*~' --exclude='*.swp' --exclude='Makefile'"
 
 install:
-	rsync -CrtW . ${VIMFILES}
+	rsync -CrtW ${EXCLUDE}  . ${VIMFILES}
