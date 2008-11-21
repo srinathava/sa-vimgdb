@@ -65,11 +65,11 @@ function! s:GdbInitWork( )
     " shows the contents
     if g:GdbShowAsyncOutputWindow
         exec '!xterm -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
+        exec '!sleep 0.4'
     else
         python from VimGdbServer import startVimServerThread
         exec 'python startVimServerThread("'.v:servername.'")'
     endif
-    exec '!sleep 0.4'
 
     python from VimGdbClient import VimGdbClient
     exec 'python gdbClient = VimGdbClient('.s:GdbCmdWinBufNum.')'
@@ -822,9 +822,9 @@ function! gdb#gdb#CollapseGdbVar()
     " this one. This basically collapses the tree beneath this one.
     let curLine = line('.')
     let lastLine = line('$')
-    let curInd = strlen(matchstr(getline('.'), '^\s*'))
+    let curInd = strlen(matchstr(getline('.'), '^[co ]\s*'))
     while 1
-        let nextInd = strlen(matchstr(getline(curLine + 1), '^\s*'))
+        let nextInd = strlen(matchstr(getline(curLine + 1), '^[co ]\s*'))
         if nextInd <= curInd
             break
         endif

@@ -26,7 +26,7 @@ def startVimServerThread(serverName):
     s = VimServerThread(serverName)
     s.start()
     # wait a bit for the server to start serving.
-    time.sleep(0.1)
+    time.sleep(0.4)
 
 if __name__ == '__main__':
     s = VimGdbServer(sys.argv[1])
