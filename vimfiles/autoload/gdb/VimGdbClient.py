@@ -147,23 +147,15 @@ class VimGdbClient:
         self.getReply('DIE')
 
     def addGdbVar(self, expr):
-        try:
-            obj = self.getParsedGdbMiOutput('-var-create - @ %s' % expr)
-            # ^done,name="var1",numchild="1",type="class CG::Scope *"
-            name = obj.name
-            numchild = obj.numchild
-            type = obj.type
-        except:
-            return
+        obj = self.getParsedGdbMiOutput('-var-create - @ %s' % expr)
+        # ^done,name="var1",numchild="1",type="class CG::Scope *"
 
-
-        if numchild > 0:
+        if obj.numchild > 0:
             str = ' + '
         else:
             str = '   '
 
-        str += ('%s ' % expr)
-        str += (' {%s}' % name)
+        str += '%s <%s> {%s}' % (expr, obj.value, obj.name)
 
         vim.current.buffer.append(str)
         vim.command('redraw')
@@ -209,7 +201,16 @@ class VimGdbClient:
             varname = m.group(2)
             obj = self.getParsedGdbMiOutput('-var-delete -c %s' % varname)
 
+    def deleteGdbVar(self):
+        m = re.search(r'{(\S+)}$', vim.current.line)
+        if m:
+            varname = m.group(1)
+            self.getSilentMiOutput('-var-delete %s' % varname)
+
     def refreshGdbVars(self):
+        if len(vim.current.buffer) == 1:
+            return
+
         obj = self.getParsedGdbMiOutput('-var-update 1 *')
         # ^done,changelist=[{name="var1.public.foo1",value="0x401018 \"hello world\"",in_scope="true",type_changed="false"},{name="var1.public.foo4",value="8",in_scope="true",type_changed="false"}]
         

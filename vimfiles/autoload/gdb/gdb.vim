@@ -175,7 +175,7 @@ endfunction " }}}
 " Description: 
 function! s:CreateGdbMaps()
     call s:CreateMap('<C-c>',   ':call gdb#gdb#Interrupt()<CR>', 'n')
-    call s:CreateMap('<F5>',    ':call gdb#gdb#RunOrContinue()<CR>', 'n')
+    call s:CreateMap('<F5>',    ':call gdb#gdb#Continue()<CR>', 'n')
     call s:CreateMap('<S-F5>',  ':call gdb#gdb#Kill()<CR>', 'n')
     call s:CreateMap('<C-F5>',  ':call gdb#gdb#Interrupt()<CR>', 'n')
     call s:CreateMap('<F10>',   ':call gdb#gdb#Next()<CR>', 'n')
@@ -674,6 +674,9 @@ function! gdb#gdb#Run()
 endfunction " }}}
 " gdb#gdb#Continue: {{{
 function! gdb#gdb#Continue()
+    if s:GdbWarnIfBusy()
+        return
+    endif
     call gdb#gdb#ResumeProgram('continue')
 endfunction " }}}
 " gdb#gdb#RunOrContinue: runs/continues the inferior {{{
@@ -793,6 +796,8 @@ function! gdb#gdb#OpenGdbVarsWindow()
         $ d _
 
         nmap <buffer> <silent> <tab> :call gdb#gdb#ToggleGdbVar()<CR>
+        nmap <buffer> <silent> <del> :call gdb#gdb#DeleteGdbVar(0)<CR>
+        nmap <buffer> <silent> <S-del> :call gdb#gdb#DeleteGdbVar(1)<CR>
         setlocal ft=gdbvars
     endif
 
@@ -854,6 +859,25 @@ function! gdb#gdb#RefreshGdbVars()
         %s/^[^#]/ /
         python gdbClient.refreshGdbVars()
     endif
+endfunction " }}}
+" gdb#gdb#DeleteGdbVar:  {{{
+" Description: 
+function! gdb#gdb#DeleteGdbVar(wholeTree)
+    if a:wholeTree == 1
+        " go to the root of the tree
+        if matchstr(getline('.'), '^...\w') == ''
+            let found = search('^...\w', 'b')
+            if found == 0
+                return
+            endif
+        endif
+    endif
+    " First delete everything below.
+    call gdb#gdb#CollapseGdbVar()
+    " then delete itself.
+    python gdbClient.deleteGdbVar()
+    " then delete the current line.
+    . d _
 endfunction " }}}
 
 " ==============================================================================
