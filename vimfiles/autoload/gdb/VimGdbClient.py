@@ -61,10 +61,7 @@ class VimGdbClient:
             return self.queryAnswer
 
         ch = vim.eval(r'confirm("%s", "&Yes\n&No")' % query)
-        if ch == '1':
-            retval = 'y'
-        else:
-            retval = 'n'
+        retval = 'y' if (ch == 1) else 'n'
         vim.command(r'let retval = "%s\n"' % retval)
         return retval
 
