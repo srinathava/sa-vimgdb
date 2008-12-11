@@ -24,7 +24,7 @@ endfunction " }}}
 call gdb#gdb#Let('GdbCmdWinName', '_GDB_Command_Window_')
 call gdb#gdb#Let('GdbStackWinName', '_GDB_Stack_Window_')
 call gdb#gdb#Let('GdbVarWinName', '_GDB_Variables_Window')
-call gdb#gdb#Let('GdbShowAsyncOutputWindow', 0)
+call gdb#gdb#Let('GdbShowAsyncOutputWindow', 1)
 
 " ==============================================================================
 " Script local variables
