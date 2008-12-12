@@ -4,10 +4,11 @@ import vim
 import re
 from sockutils import *
 from GdbMiParser import parseGdbMi
+import cStringIO
 
 class VimGdbClient:
-    def __init__(self, bufno):
-        self.buffer = vim.buffers[bufno - 1]
+    def __init__(self):
+        self.buffer = vim.current.buffer
 
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
         self.newDataTotal = ''
@@ -15,6 +16,8 @@ class VimGdbClient:
         self.toprint = ''
         self.socket = None
         self.queryAnswer = None
+
+        self.log = cStringIO.StringIO()
 
     def getReply(self, input):
         HOST = '127.0.0.1'        # The remote host
@@ -60,7 +63,7 @@ class VimGdbClient:
         if self.queryAnswer:
             return self.queryAnswer
 
-        ch = vim.eval(r'confirm("%s", "&Yes\n&No")' % query)
+        ch = int(vim.eval(r'confirm("%s", "&Yes\n&No")' % query))
         if (ch == 1):
             retval = 'y'
         else:
@@ -114,6 +117,7 @@ class VimGdbClient:
         lines = out.splitlines()
         for i in range(len(lines)):
             if re.match('^\^', lines[i]):
+                print >> self.log, "Getting output for '%s':\n%s\n" % (cmd, lines[i])
                 return lines[i]
 
         return ''
@@ -218,8 +222,10 @@ class VimGdbClient:
         for change in changelist:
             varname = change.name
             in_scope = change.in_scope
-            value = change.value
             if in_scope == 'true':
+                # escaping / is necessary otherwise the vim command fails
+                # silently!
+                value = change.value.replace('/', r'\/')
                 vim.command(r'g/{%s}$/s/<.\{-}>/<%s>/' % (varname, value))
                 vim.command(r'g/{%s}$/s/^ /c/' % varname)
             elif in_scope == 'false':

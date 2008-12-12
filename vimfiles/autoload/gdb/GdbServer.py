@@ -48,6 +48,8 @@ class GdbServer:
             self.conn = None
 
     def run(self):
+        self.printDebug('Starting GDB debugging ....')
+
         # Bind to port.
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # The magic line below prevents the socket from throwing the

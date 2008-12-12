@@ -54,7 +54,8 @@ function! s:GdbInitWork( )
     endif
 
     let s:gdbStarted = 1
-    let s:GdbCmdWinBufNum = s:GdbOpenWindow(s:GdbCmdWinName)
+    let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
+    let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
     setlocal filetype=gdbvim
 
     python import sys
@@ -72,7 +73,7 @@ function! s:GdbInitWork( )
     endif
 
     python from VimGdbClient import VimGdbClient
-    exec 'python gdbClient = VimGdbClient('.s:GdbCmdWinBufNum.')'
+    python gdbClient = VimGdbClient()
 
     " prevent stupid press <return> to continue prompts.
     call gdb#gdb#RunCommand('set height 0')
@@ -106,7 +107,7 @@ endfunction " }}}
 function! gdb#gdb#Init()
     keepalt call s:GdbInitWork()
 endfunction " }}}
-" s:GdbOpenWindow: opens one of the GDB windows {{{
+" gdb#gdb#GdbOpenWindow: opens one of the GDB windows {{{
 " Description: Open a new GDB window with the given name. We first attempt to
 " see if any GDB window is currently open. If there is one, then we will
 " vertically split a new window from it. Otherwise we horizontally split a new
@@ -114,7 +115,7 @@ endfunction " }}}
 
 " We use a map with a constant value of 1 to simulate a set.
 let s:gdbBufNums = {}
-function! s:GdbOpenWindow(bufName)
+function! gdb#gdb#GdbOpenWindow(bufName)
     let bufnum = bufnr(a:bufName, 1)
     let s:gdbBufNums[bufnum] = 1
 
@@ -483,7 +484,7 @@ function! gdb#gdb#ShowStack()
         return
     endif
 
-    let s:GdbStackWinBufNum = s:GdbOpenWindow(s:GdbStackWinName)
+    let s:GdbStackWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbStackWinName)
     " remove original stuff.
     % d _
     python gdbClient.expandStack(10)
@@ -789,7 +790,7 @@ let s:GdbVarWinBufNum = -1
 function! gdb#gdb#OpenGdbVarsWindow()
     let redoMaps = (bufwinnr(s:GdbVarWinName) == -1)
     
-    let s:GdbVarWinBufNum = s:GdbOpenWindow(s:GdbVarWinName)
+    let s:GdbVarWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbVarWinName)
 
     if redoMaps
         0 put='# Press <tab> to expand/collapse the hierarchy'
