@@ -397,7 +397,7 @@ endfunction " }}}
 function! gdb#gdb#RunOrResume(arg)
     if a:arg =~ '^start$'
         call gdb#gdb#Init()
-    elseif a:arg =~ '^\(run\|re\%[turn]\|co\%[ntinue]\|fi\%[nish]\|st\%[epi]\|ne\%[xti]\)'
+    elseif a:arg =~ '^\(run\|re\%[turn]\|co\%[ntinue]\|fi\%[nish]\|st\%[epi]\|ne\%[xti]\)\>'
         call gdb#gdb#ResumeProgram(a:arg)
     else
         call gdb#gdb#RunCommand(a:arg)
