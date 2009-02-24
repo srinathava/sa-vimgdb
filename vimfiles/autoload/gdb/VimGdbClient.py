@@ -27,9 +27,13 @@ class VimGdbClient:
 
         sendData(self.socket, input)
         while 1:
-            data = self.socket.recv(1024)
-            if not data:
-                break
+            try:
+                data = self.socket.recv(1024)
+                if not data:
+                    break
+            except:
+                # Whoa!
+                continue
 
             self.onNewData(data)
 

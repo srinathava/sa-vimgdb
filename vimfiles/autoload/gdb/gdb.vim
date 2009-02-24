@@ -66,7 +66,7 @@ function! s:GdbInitWork( )
     " shows the contents
     if g:GdbShowAsyncOutputWindow
         exec '!xterm -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
-        exec '!sleep 0.4'
+        exec '!sleep 2'
     else
         python from VimGdbServer import startVimServerThread
         exec 'python startVimServerThread("'.v:servername.'")'
