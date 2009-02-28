@@ -2,6 +2,7 @@ import socket
 import sys
 import vim
 import re
+import errno
 from sockutils import *
 from GdbMiParser import parseGdbMi
 import cStringIO
@@ -31,9 +32,11 @@ class VimGdbClient:
                 data = self.socket.recv(1024)
                 if not data:
                     break
-            except:
-                # Whoa!
-                continue
+            except socket.error,(en, msg):
+                if en == errno.EINTR:
+                    continue
+                else:
+                    raise
 
             self.onNewData(data)
 
