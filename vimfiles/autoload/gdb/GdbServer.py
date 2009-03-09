@@ -23,7 +23,7 @@ class ReaderThread(Thread):
     def run_try(self):
         self.server.resumeOnReaderDone = True
         self.server.getReply(self.cmd)
-        self.server.onReaderIsDone()
+        self.server.onReaderAboutToBeDone()
 
 class GdbServer:
     def __init__(self):
@@ -235,9 +235,30 @@ class GdbServer:
             self.write(reply + '\n')
             self.newDataTotal = ''
 
-    def onReaderIsDone(self):
+    def onReaderAboutToBeDone(self):
+        # The reason for this additional thread to be created is to ensure
+        # that the reader thread is completely done by the time the
+        # onResume method is called. If the onResume were called from
+        # within the reader thread itself, then the client would be
+        # guaranteed to get a BUSY signal when it tried to react to the
+        # onResume signal.
+        #
+        # However, if the client is the one who is actually interrupting
+        # us, then do not bother sending the onResume signal to it. Sending
+        # the onResume signal on a client interrupt will cause multiple
+        # simultaneous connection attempts to the server from the client
+        # causing hangs/crashes.
         if self.resumeOnReaderDone:
-            self.onResume()
+            # the time interval is really immaterial. What is important is
+            # that the timer is a separate thread which can wait for the
+            # reader thread to finish.
+            t = Timer(0.001, self.waitForReader)
+            t.start()
+
+    def waitForReader(self):
+        self.reader.join()
+        self.reader = None
+        self.onResume()
 
     def onResume(self):
         pass
