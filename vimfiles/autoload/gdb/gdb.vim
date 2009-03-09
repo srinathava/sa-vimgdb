@@ -65,8 +65,8 @@ function! s:GdbInitWork( )
     " We have a choice here... We can either start a separate xterm which
     " shows the contents
     if g:GdbShowAsyncOutputWindow
-        exec '!xterm -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
-        exec '!sleep 2'
+        silent! exec '!xterm -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
+        silent! sleep 2
     else
         python from VimGdbServer import startVimServerThread
         exec 'python startVimServerThread("'.v:servername.'")'
@@ -149,7 +149,7 @@ endfunction " }}}
 " Description: 
 function! s:CloseAllGdbWindows()
     for n in keys(s:gdbBufNums)
-        exec 'bdelete '.n
+        exec 'silent! bdelete '.n
     endfor
 endfunction " }}}
 " s:CreateMap: creates a map safely {{{
@@ -188,20 +188,23 @@ function! s:CreateGdbMaps()
     call s:CreateMap('<C-P>',   ':call gdb#gdb#PrintExpr()<CR>', 'n')
     call s:CreateMap('<C-P>',   'y:call gdb#gdb#RunCommand("print <C-R>"")<CR>', 'v')
 endfunction " }}}
+" gdb#gdb#Panic: If something went wrong {{{
+" Description: 
+" Even with my best efforts, strange server-client errors seem to keep
+" happening. At this point, the GDB thread has died from underneath us.
+" Therefore, a fresh restart is necessary.
+function! gdb#gdb#Panic()
+    let ch = confirm('You should only panic if you see client-server errors. Are you sure you want to panic?', "&Panic\n&Dont", 1)
+    if ch == 1
+        call s:CloseAllGdbWindows()
+        sign unplace 1
+        set balloonexpr=
+        let s:gdbStarted = 0
+    endif
+endfunction " }}}
 
 " ==============================================================================
-" Updating the _GDB_ window dynamically. {{{
-" 
-" There are a LOT of hacks in order to accomplish dynamically updating the
-" GDB output window via a thread spawned off by the main thread. When we
-" are waiting for control to return to the VIM window, we start off a
-" thread which waits for the string '*done' to be printed out by GDB.
-" However, the output generated in the meanwhile still needs to appear. If
-" we do this by drawing commands in the thread, then async errors happen.
-" Therefore there is a lot of going back and forth. The basic idea is that
-" the child thread "feedkeys" to the main thread which then handles updates
-" to the UI.
-" }}}
+" Updating the _GDB_ window dynamically.
 " ============================================================================== 
 " gdb#gdb#IsUserBusy: returns 1 if cursor moved etc. {{{
 " Description: 
@@ -214,29 +217,22 @@ function! gdb#gdb#UpdateCmdWin()
     " control to get back to the GDB process. This is called when the
     " program is still running but GDB has produced some output.
 
-    " If the Gdb command window is not open, don't do anything.
-    if bufwinnr(s:GdbCmdWinBufNum) == -1
-        return
-    endif
+    let presWinNr = winnr()
 
-    python gdbClient.printme()
-    redraw
-endfunction " }}}
-" gdb#gdb#ScrollCmdWin: {{{
-function! gdb#gdb#ScrollCmdWin(gdbWinName)
-    let gdbWinNr = bufwinnr(a:gdbWinName)
+    " If the Gdb command window is not open, don't do anything.
+    let gdbWinNr = bufwinnr(s:GdbCmdWinBufNum)
     if gdbWinNr == -1
         return
     endif
-    let presWinNr = winnr()
 
-    if gdbWinNr != presWinNr
-        exec gdbWinNr.' wincmd w'
-    endif
+    exec gdbWinNr.' wincmd w'
+    python gdbClient.printNewLines()
     normal! G
+
     if gdbWinNr != presWinNr
         wincmd w
     endif
+
     redraw
 endfunction " }}}
 " gdb#gdb#OnResume: {{{
@@ -251,7 +247,7 @@ function! gdb#gdb#OnResume()
     " We want to make sure that the command window shows the latest stuff
     " when we are given control. Too bad if the user is busy typing
     " something while this is going on.
-    " call gdb#gdb#UpdateCmdWin()
+    call gdb#gdb#UpdateCmdWin()
     call gdb#gdb#GotoCurFrame()
 
     let pos = getpos('.')
@@ -293,7 +289,11 @@ function! s:GdbGetCommandOutput(cmd)
     if s:GdbWarnIfBusy()
         return ''
     endif
+
+    let pos = s:GetCurPos()
     exec 'python gdbClient.getCommandOutput("""'.a:cmd.' """, "retval")'
+    call s:SetCurPos(pos)
+
     return retval
 endfunction " }}}
 " gdb#gdb#RunCommand: runs the given GDB command {{{
@@ -310,7 +310,9 @@ function! gdb#gdb#RunCommand(cmd)
         let cmd = a:cmd
     endif
 
+    let pos = s:GetCurPos()
     exec 'python gdbClient.runCommand("""'.cmd.'""")'
+    call s:SetCurPos(pos)
 endfunction " }}}
 " gdb#gdb#Terminate: terminates the running GDB thread {{{
 function! gdb#gdb#Terminate()
@@ -329,32 +331,7 @@ sign define gdbCurFrame text==> texthl=Search linehl=Search
 function! gdb#gdb#PlaceSign(file, lnum)
 
     " Goto the window showing this file or the first listed buffer.
-    let winnum = bufwinnr(a:file)
-    if winnum == -1
-        " file is not currently being shown
-        " find the first listed buffer.
-        let i = 1
-        while i <= winnr('$')
-            if getbufvar(winbufnr(i), '&buflisted') != 0
-                let winnum = i
-                break
-            endif
-            let i = i + 1
-        endwhile
-        if winnum == -1
-            " no buffers are listed! Random case, just split open a new
-            " window with the file.
-            exec 'split '.a:file
-        else
-            " goto the window showing the first listed buffer and drop the
-            " file onto it.
-            exec winnum.' wincmd w'
-            exec 'drop '.a:file
-        endif
-    else
-        " goto the window showing the file.
-        exec winnum.' wincmd w'
-    endif
+    call s:OpenFile(a:file)
 
     " Now goto the correct cursor location and place the sign.
     call cursor(a:lnum, 1)
@@ -494,7 +471,8 @@ function! gdb#gdb#ShowStack()
     setlocal nowrap
 
     " set up a local map to go to the required frame.
-    exec "nmap <buffer> <silent> <CR> :call gdb#gdb#GotoSelectedFrame()<CR>"
+    exec "nmap <buffer> <silent> <CR>           :call gdb#gdb#GotoSelectedFrame()<CR>"
+    exec "nmap <buffer> <silent> <2-LeftMouse>  :call gdb#gdb#GotoSelectedFrame()<CR>"
     exec "nmap <buffer> <silent> <tab> :call gdb#gdb#ExpandStack(10)<CR>"
     exec "nmap <buffer> <silent> <C-tab> :call gdb#gdb#ExpandStack(9999)<CR>"
 endfunction " }}}
@@ -516,6 +494,8 @@ let s:numBreakPoints = 0
 exec 'sign define gdbBreakPoint text=!! icon='.s:scriptDir.'/bp.png texthl=Error'
 function! gdb#gdb#SetBreakPoint()
     call s:SetBreakPointAt(expand('%:p'), line('.'), gdb#gdb#GetAllBreakPoints())
+
+    let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
 endfunction " }}}
 " s:SetBreakPointAt: sets breakpoint at (file, line) {{{
 " Description: 
@@ -523,36 +503,42 @@ function! s:SetBreakPointAt(fname, lnum, prevBps)
     " To fix very strange problem with setting breakpoints in files on
     " network drives.
     let fnameTail = fnamemodify(a:fname, ':t')
-    let output = s:GdbGetCommandOutput('break '.fnameTail.':'.a:lnum)
-    if output =~ 'Breakpoint \d\+'
-        let bpnum = matchstr(output, 'Breakpoint \zs\d\+')
-        let lnum = line('.')
-        
-        let spec = 'line='.a:lnum.' file='.a:fname
-
-        let idx = index(a:prevBps, spec)
-        if idx < 0
-            let signId = (1024+s:numBreakPoints)
-
-            " FIXME: Should do this only if a sign is already not placed at
-            " this location.
-            exec 'sign place '.signId.' name=gdbBreakPoint '.spec
-            let s:numBreakPoints += 1
+    
+    if s:gdbStarted
+        if s:GdbWarnIfBusy()
+            return
         endif
+
+        let output = s:GdbGetCommandOutput('break '.fnameTail.':'.a:lnum)
+        if output !~ 'Breakpoint \d\+'
+            return
+        endif
+    end
+
+    let lnum = line('.')
+    let spec = 'line='.a:lnum.' file='.a:fname
+    let idx = index(a:prevBps, spec)
+    if idx < 0
+        let signId = (1024+s:numBreakPoints)
+
+        " FIXME: Should do this only if a sign is already not placed at
+        " this location.
+        exec 'sign place '.signId.' name=gdbBreakPoint '.spec
+        let s:numBreakPoints += 1
     endif
 endfunction " }}}
 " gdb#gdb#ClearBreakPoint: clears break point {{{
 " Description:  
 function! gdb#gdb#ClearBreakPoint()
-    if s:GdbWarnIfBusy()
-        return
+    if s:gdbStarted == 1
+        if s:GdbWarnIfBusy()
+            return
+        endif
+        " ask GDB to clear breakpoints here.
+        call gdb#gdb#RunCommand('clear '.expand('%:p:t').':'.line('.'))
     endif
 
-    " ask GDB to clear breakpoints here.
-    call gdb#gdb#RunCommand('clear '.expand('%:p:t').':'.line('.'))
-
     let spec = 'line='.line('.').' file='.expand('%:p')
-    let breakPoints = gdb#gdb#GetAllBreakPoints()
 
     while 1
         let again = 0
@@ -567,6 +553,7 @@ function! gdb#gdb#ClearBreakPoint()
         endtry
     endwhile
 
+    let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
 endfunction " }}}
 " gdb#gdb#GetAllBreakPoints: gets all breakpoints set by us {{{
 " Description: 
@@ -575,7 +562,7 @@ function! gdb#gdb#GetAllBreakPoints()
 
     let bps = []
     let fname = ''
-    for line in split(signs, '\n')
+    for line in split(signs, "\n")
         if line =~ 'Signs for'
             let fname = matchstr(line, 'Signs for \zs.*\ze:$')
             let fname = fnamemodify(fname, ':p')
@@ -612,6 +599,27 @@ function! gdb#gdb#ToggleBreakPoint()
         endif
     endfor
     call gdb#gdb#SetBreakPoint()
+endfunction " }}}
+" gdb#gdb#RestoreSessionBreakPoints:  {{{
+" Description: 
+
+let s:restoredSessionBreakPoints = 0
+function! gdb#gdb#RestoreSessionBreakPoints()
+    if exists('g:GdbBreakPoints') && s:restoredSessionBreakPoints == 0
+        let s:restoredSessionBreakPoints = 1
+        let breakPoints = split(g:GdbBreakPoints, "\n")
+
+        for bp in breakPoints
+            let signId = (1024+s:numBreakPoints)
+            let fname = matchstr(bp, 'file=\zs.*\ze')
+            if bufnr(fname) == -1
+                let lnum = matchstr(bp, 'line=\zs\d\+\ze')
+                exec 'badd +'.lnum.' '.fname
+            endif
+            exec 'sign place '.signId.' name=gdbBreakPoint '.bp
+            let s:numBreakPoints += 1
+        endfor
+    endif
 endfunction " }}}
 
 " ==============================================================================
@@ -651,7 +659,6 @@ function! gdb#gdb#Attach(pid)
     if pid !~ '^\d\+$'
         return
     end
-    echomsg 'Attaching to PID "'.pid.'"'
     if s:gdbStarted == 0
         call s:GdbInitWork()
     endif
@@ -720,6 +727,7 @@ function! gdb#gdb#Interrupt( )
         return
     endif
     python gdbClient.interrupt()
+    call gdb#gdb#OnResume()
 endfunction " }}}
 " gdb#gdb#Kill: kills the inferior {{{
 function! gdb#gdb#Kill()
@@ -727,7 +735,7 @@ function! gdb#gdb#Kill()
         return
     endif
     if gdb#gdb#IsBusy()
-        call gdb#gdb#Interrupt()
+        python gdbClient.interrupt()
     endif
     call gdb#gdb#RunCommand('kill')
     let progInfo = s:GdbGetCommandOutputSilent('info program')
@@ -735,6 +743,8 @@ function! gdb#gdb#Kill()
         sign unplace 1
         set balloonexpr=
         call gdb#gdb#Terminate()
+    else
+        call gdb#gdb#OnResume()
     endif
 endfunction " }}}
 
@@ -799,16 +809,20 @@ function! gdb#gdb#OpenGdbVarsWindow()
         nmap <buffer> <silent> <tab> :call gdb#gdb#ToggleGdbVar()<CR>
         nmap <buffer> <silent> <del> :call gdb#gdb#DeleteGdbVar(0)<CR>
         nmap <buffer> <silent> <S-del> :call gdb#gdb#DeleteGdbVar(1)<CR>
-        setlocal ft=gdbvars
+        setlocal ft=gdbvars nowrap
     endif
 
 endfunction " }}}
-function! gdb#gdb#AddGdbVar()
+function! gdb#gdb#AddGdbVar(inExpr)
     if s:GdbWarnIfBusy()
         return
     endif
 
-    let expr = s:GetContingString(bufnr('%'), line('.'), col('.'))
+    if a:inExpr != ''
+        let expr = a:inExpr
+    else
+        let expr = s:GetContingString(bufnr('%'), line('.'), col('.'))
+    endif
 
     call gdb#gdb#OpenGdbVarsWindow()
 
@@ -901,6 +915,53 @@ function! s:GetCommandOutput(cmd)
     let @a = _a
 
     return output
+endfunction " }}}
+" s:GetCurPos:  {{{
+" Description: 
+function! s:GetCurPos()
+    let pos = getpos('.')
+    let pos[0] = bufnr('%')
+    return getpos('.')
+endfunction " }}}
+" s:SetCurPos:  {{{
+" Description: 
+function! s:SetCurPos(pos)
+    let bufnr = a:pos[1]
+    call s:OpenFile(bufname(bufnr))
+    call setpos('.', a:pos)
+endfunction " }}}
+" s:OpenFile:  {{{
+" Description: 
+function! s:OpenFile(file)
+
+    " Goto the window showing this file or the first listed buffer.
+    let winnum = bufwinnr(a:file)
+    if winnum == -1
+        " file is not currently being shown
+        " find the first listed buffer.
+        let i = 1
+        while i <= winnr('$')
+            if getbufvar(winbufnr(i), '&buflisted') != 0
+                let winnum = i
+                break
+            endif
+            let i = i + 1
+        endwhile
+        if winnum == -1
+            " no buffers are listed! Random case, just split open a new
+            " window with the file.
+            exec 'split '.a:file
+        else
+            " goto the window showing the first listed buffer and drop the
+            " file onto it.
+            exec winnum.' wincmd w'
+            exec 'drop '.a:file
+        endif
+    else
+        " goto the window showing the file.
+        exec winnum.' wincmd w'
+    endif
+
 endfunction " }}}
 
 " vim: fdm=marker

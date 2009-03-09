@@ -13,8 +13,17 @@ class ReaderThread(Thread):
         self.cmd = cmd
 
     def run(self):
+        try:
+            self.run_try()
+        except:
+            self.server.appendLog('Exception in reader thread')
+            self.server.printException()
+            raise
+
+    def run_try(self):
+        self.server.resumeOnReaderDone = True
         self.server.getReply(self.cmd)
-        self.server.onReaderAboutToBeDone()
+        self.server.onReaderIsDone()
 
 class GdbServer:
     def __init__(self):
@@ -26,20 +35,21 @@ class GdbServer:
         self.conn = None
         self.stopReading = False
         self.newDataTotal = ''
+        self.resumeOnReaderDone = True
 
         self.logfile = '/tmp/gdbmi.log'
 
-    def printDebug(self, msg):
-        f = open(self.logfile, 'a')
-        print >> f, msg
-        f.close()
+    def appendLog(self, msg):
+        open(self.logfile, 'a').write('%f: %s\n' % (time.time(), msg))
 
     def printException(self, maxTBlevel=5):
         traceback.print_exc(file=open(self.logfile, 'a'))
 
     def closeConnection(self, reason):
+        self.appendLog('closing connection, reason = "%s", conn = %s' % (reason, self.conn))
         if self.conn:
             sendData(self.conn, reason+'\n')
+            sendData(self.conn, '--GDB--EXIT--\n')
 
             # print 'Server shutting down connection'
             self.conn.shutdown(2)
@@ -48,7 +58,15 @@ class GdbServer:
             self.conn = None
 
     def run(self):
-        self.printDebug('Starting GDB debugging ....')
+        try:
+            self.run_try()
+        except:
+            self.appendLog('Exception in main server loop!')
+            self.printException()
+            raise
+
+    def run_try(self):
+        self.appendLog('Starting GDB debugging ....')
 
         # Bind to port.
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -69,20 +87,21 @@ class GdbServer:
                 self.socket.listen(1)
                 self.conn, addr = self.socket.accept()
             except:
-                self.printDebug('Socket listening threw an exception!')
+                self.appendLog('Socket listening threw an exception!')
                 self.printException()
                 continue
 
             try:
                 data = self.conn.recv(1024)
             except:
-                self.printDebug('Socket accept threw an exception')
+                self.appendLog('Socket accept threw an exception')
                 self.printException()
                 break
 
             tokens = data.split(' ', 1)
             mode = tokens[0]
             command = ''.join(tokens[1:])
+            self.appendLog('getting mode = [%s], command [%s]' % (mode, command))
 
             if not re.match('INT|SETQA|SYNC|ASYNC|ISBUSY|DIE', mode):
                 self.closeConnection('WRONG_MODE')
@@ -90,7 +109,7 @@ class GdbServer:
 
             # client wants us to go away...
             if mode == 'DIE':
-                self.printDebug('Client wants us to go away...')
+                self.appendLog('Client wants us to go away...')
                 break
 
             if mode == 'SETQA':
@@ -115,7 +134,7 @@ class GdbServer:
 
             self.closeConnection('')
 
-        self.printDebug('Done with main server loop...')
+        self.appendLog('Done with main server loop...')
 
         # Done main server loop... Do cleanup...
         if self.reader and self.reader.isAlive():
@@ -142,13 +161,22 @@ class GdbServer:
         GDB interrupt the process it is running and fall back onto the GDB
         prompt.
         """
+
+        # When we are interrupted by the client, do NOT do onResume. If we
+        # do, it results in multiple simultaneous connections being made to
+        # the GDB server, one by the onResume() and then by the client code
+        # which comes after the interrupt. The second connection will just
+        # hang till the first one is processed and done. 
+        self.resumeOnReaderDone = False
         try:
             self.write(self.intr_key)
         except KeyboardInterrupt:
             pass
 
-        # takes a little while to "take"
-        time.sleep(0.5)
+        # Wait for the async read thread to finish.
+        if self.reader:
+            self.reader.join()
+            self.reader = None
 
     def startGdbShell(self):
         self.pid, self.fd = pty.fork( )
@@ -207,13 +235,8 @@ class GdbServer:
             self.write(reply + '\n')
             self.newDataTotal = ''
 
-    def onReaderAboutToBeDone(self):
-        t = Timer(0.01, self.waitForReaderToBeDone)
-        t.start()
-
-    def waitForReaderToBeDone(self):
-        if self.reader:
-            self.reader.join()
+    def onReaderIsDone(self):
+        if self.resumeOnReaderDone:
             self.onResume()
 
     def onResume(self):

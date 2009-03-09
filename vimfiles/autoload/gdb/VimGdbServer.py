@@ -10,8 +10,10 @@ class VimGdbServer(GdbServer):
         self.vimServerName = vimServerName
 
     def onResume(self):
+        self.appendLog('sending onResume command to VIM')
         cmd = "vim --servername %s --remote-expr 'gdb#gdb#OnResume()'" % self.vimServerName
         commands.getoutput(cmd)
+        self.appendLog('done receiving reply from VIM about onResume')
 
 class VimServerThread(Thread):
     def __init__(self, vimServerName):

@@ -6,11 +6,10 @@ import errno
 from sockutils import *
 from GdbMiParser import parseGdbMi
 import cStringIO
+import time
 
 class VimGdbClient:
     def __init__(self):
-        self.buffer = vim.current.buffer
-
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
         self.newDataTotal = ''
         self.updateWindow = True
@@ -19,6 +18,10 @@ class VimGdbClient:
         self.queryAnswer = None
 
         self.log = cStringIO.StringIO()
+        self.logFile = '/tmp/gdbclient.log'
+
+    def appendLog(self, msg):
+        open(self.logFile, 'a').write('%f: %s\n' % (time.time(), msg))
 
     def getReply(self, input):
         HOST = '127.0.0.1'        # The remote host
@@ -26,21 +29,43 @@ class VimGdbClient:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((HOST, PORT))
 
+        # If there's an empty packet, we keep trying 3 times after the
+        # first empty packet just to ensure that the server is _really_
+        # done sending everything it wants to.
+        maxEmptyPackets = 3
+        nEmptyPackets = 0
+
+        self.appendLog('Sending message [%s]' % input)
         sendData(self.socket, input)
-        while 1:
+        self.stopReading = False
+        while not self.stopReading:
             try:
                 data = self.socket.recv(1024)
                 if not data:
-                    break
+                    self.appendLog('Timing out before receiving end marker')
+                    nEmptyPackets = nEmptyPackets + 1
+                    if nEmptyPackets > maxEmptyPackets:
+                        self.appendLog('Too many empty packets recd. Breaking out of loop...')
+                        break
+                    else:
+                        # Try again after lazing around for a bit.
+                        time.sleep(0.1)
+                        continue
+                else:
+                    nEmptyPackets = 0
             except socket.error,(en, msg):
                 if en == errno.EINTR:
                     continue
                 else:
-                    raise
+                    # Since we are trying to repeatedly ask for more data
+                    # even after the socket might be closed by the server,
+                    # we need to account for unforseen errors.
+                    break
 
             self.onNewData(data)
 
         # print 'Client shutting down connection'
+        self.appendLog('Closing client connection')
         self.socket.shutdown(2)
         self.socket.close()
         del self.socket
@@ -89,6 +114,10 @@ class VimGdbClient:
                 self.newDataTotal = re.sub(self.queryPat, '', self.newDataTotal)
                 sendData(self.socket, reply)
 
+        N = len('--GDB--EXIT--\n')
+        if self.newDataTotal[-N:] == '--GDB--EXIT--\n':
+            self.stopReading = True
+
         if self.updateWindow:
             self.printNewData(data)
 
@@ -109,11 +138,18 @@ class VimGdbClient:
             else: 
                 self.toprint = lines[-1]
                 lines = lines[:-1]
+
+            if lines and lines[-1] == '--GDB--EXIT--':
+                lines = lines[:-1]
+
             if not lines:
                 return
 
-            self.buffer.append(lines)
-            vim.command('keepalt call gdb#gdb#ScrollCmdWin("%s")' % self.buffer.name)
+            self.newLines = lines
+            vim.command('keepalt call gdb#gdb#UpdateCmdWin()')
+
+    def printNewLines(self):
+        vim.current.buffer.append(self.newLines)
 
     def getSilentMiOutput(self, cmd):
         self.updateWindow = False
