@@ -2,3 +2,6 @@ matlab_crash_dump*
 test/vartest
 gdbmiserver*.tgz
 *.sw?
+.config
+java.log*
+.lesshst
