@@ -259,6 +259,7 @@ function! gdb#gdb#OnResume()
     exec bufwinnr(bufnum).' wincmd w'
     call setpos('.', pos)
 
+    call foreground()
     redraw
 endfunction " }}}
 " gdb#gdb#GetQueryAnswer:  {{{
