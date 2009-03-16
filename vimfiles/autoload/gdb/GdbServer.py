@@ -35,6 +35,7 @@ class GdbServer:
         self.conn = None
         self.stopReading = False
         self.newDataTotal = ''
+        self.newDataForClient = ''
         self.resumeOnReaderDone = True
 
         self.logfile = '/tmp/gdbmi.log'
@@ -103,7 +104,7 @@ class GdbServer:
             command = ''.join(tokens[1:])
             self.appendLog('getting mode = [%s], command [%s]' % (mode, command))
 
-            if not re.match('INT|SETQA|SYNC|ASYNC|ISBUSY|DIE', mode):
+            if not re.match('INT|SETQA|SYNC|ASYNC|ISBUSY|DIE|FLUSH', mode):
                 self.closeConnection('WRONG_MODE')
                 continue
 
@@ -118,6 +119,11 @@ class GdbServer:
 
             if ('SYNC' in mode) and (command == ''):
                 self.closeConnection('WRONG_FORMAT')
+                continue
+
+            if 'FLUSH' in mode:
+                self.flush()
+                self.closeConnection('')
                 continue
 
             isBusy = self.reader and self.reader.isAlive() 
@@ -222,10 +228,19 @@ class GdbServer:
 
         return retval
 
+    def flush(self): 
+        # Send all the lines which the client has not yet consumed.
+        if '\n' in self.newDataForClient:
+            lines = self.newDataForClient.split('\n')
+            sendData(self.conn, '\n'.join(lines[:-1]))
+            self.newDataForClient = lines[-1]
+
     def onNewData(self, data):
         sys.stdout.write(data)
         if self.conn:
             sendData(self.conn, data)
+        else:
+            self.newDataForClient += data
 
         self.newDataTotal += data
         m = self.queryPat.search(self.newDataTotal)

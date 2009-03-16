@@ -124,9 +124,7 @@ class VimGdbClient:
     def printNewData(self, data):
         self.toprint += data
         if '\n' in self.toprint:
-            newline = False
-            if self.toprint[-1] == '\n':
-                newline = True
+            newline = (self.toprint[-1] == '\n')
 
             lines = self.toprint.splitlines()
             lines = [line for line in lines if not re.match('', line) and line]
@@ -150,6 +148,7 @@ class VimGdbClient:
 
     def printNewLines(self):
         vim.current.buffer.append(self.newLines)
+        self.newLines = []
 
     def getSilentMiOutput(self, cmd):
         self.updateWindow = False

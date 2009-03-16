@@ -55,7 +55,6 @@ function! s:GdbInitWork( )
 
     let s:gdbStarted = 1
     let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
-    let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
     setlocal filetype=gdbvim
 
     python import sys
@@ -74,9 +73,14 @@ function! s:GdbInitWork( )
 
     python from VimGdbClient import VimGdbClient
     python gdbClient = VimGdbClient()
+    python gdbClient.getReply('FLUSH')
+    
+    " delete all empty lines.
+    exec 'g/^\s*$/d_'
 
     " prevent stupid press <return> to continue prompts.
     call gdb#gdb#RunCommand('set height 0')
+    call gdb#gdb#RedoAllBreakpoints()
 
     augroup TerminateGdb
         au!
@@ -247,6 +251,7 @@ function! gdb#gdb#OnResume()
     " We want to make sure that the command window shows the latest stuff
     " when we are given control. Too bad if the user is busy typing
     " something while this is going on.
+    python gdbClient.getReply('FLUSH')
     call gdb#gdb#UpdateCmdWin()
     call gdb#gdb#GotoCurFrame()
 
@@ -375,7 +380,7 @@ endfunction " }}}
 function! gdb#gdb#RunOrResume(arg)
     if a:arg =~ '^start$'
         call gdb#gdb#Init()
-    elseif a:arg =~ '^\(run\|re\%[turn]\|co\%[ntinue]\|fi\%[nish]\|st\%[epi]\|ne\%[xti]\)\>'
+    elseif a:arg =~ '^\(r\%[un]\|re\%[turn]\|co\%[ntinue]\|fi\%[nish]\|st\%[epi]\|ne\%[xti]\)\>'
         call gdb#gdb#ResumeProgram(a:arg)
     else
         call gdb#gdb#RunCommand(a:arg)
