@@ -135,6 +135,10 @@ class GdbServer:
             elif mode == 'SYNC':
                 self.getReply(command)
             elif mode == 'ASYNC':
+                # important to close the connection before we star the
+                # reader thread otherwise the reader thread can try to send
+                # data over an invalid connection.
+                self.closeConnection('')
                 self.reader = ReaderThread(self, command)
                 self.reader.start()
 

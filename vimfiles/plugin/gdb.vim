@@ -1,5 +1,5 @@
 if has('gui_running')
-    amenu &Gdb.&Start\ Gdb  :call gdb#gdb#Init()<CR>
+    amenu &Gdb.Start\ Gdb   :call gdb#gdb#Init()<CR>
     amenu &Gdb.&Step        :call gdb#gdb#Step()<CR>
     amenu &Gdb.&Next        :call gdb#gdb#Next()<CR>
     amenu &Gdb.&Finish      :call gdb#gdb#Finish()<CR>
@@ -20,8 +20,7 @@ if has('gui_running')
 
     amenu &Gdb.-sep01-      <Nop>
 
-    amenu &Gdb.Set\ &Breakpoint         :call gdb#gdb#SetBreakPoint()<CR>
-    amenu &Gdb.Re&move\ Breakpoint      :call gdb#gdb#ClearBreakPoint()<CR>
+    amenu &Gdb.&Toggle\ Breakpoint      :call gdb#gdb#ToggleBreakPoint()<CR>
 
     amenu &Gdb.-sep1- <Nop>
 
@@ -38,12 +37,20 @@ if has('gui_running')
 
     amenu &Gdb.Handle\ SIGSEGV :call gdb#gdb#RunCommand('handle SIGSEGV stop print')<CR>
     amenu &Gdb.Ignore\ SIGSEGV :call gdb#gdb#RunCommand('handle SIGSEGV nostop noprint')<CR>
+    
+    amenu &Gdb.-sep4- <Nop>
+    amenu &Gdb.Panic! :call gdb#gdb#Panic()<CR>
 
     amenu 80.5 PopUp.Run\ to\ cursor\ (GDB) :call gdb#gdb#Until()<CR>
-    amenu 80.6 PopUp.Examine\ Data\ (GDB)   :call gdb#gdb#AddGdbVar()<CR>
+    amenu 80.6 PopUp.Examine\ Data\ (GDB)   :call gdb#gdb#AddGdbVar('')<CR>
     amenu 80.7 PopUp.-sep-gdb0- <Nop>
 endif
 
 com! -nargs=1 GDB :call gdb#gdb#RunOrResume(<q-args>)
+com! -nargs=? GDBEX :call gdb#gdb#AddGdbVar(<q-args>)
+
+augroup GdbRestoreSessionBreakPoints
+    au SessionLoadPost * call gdb#gdb#RestoreSessionBreakPoints()
+augroup END
 
 " vim: fdm=marker

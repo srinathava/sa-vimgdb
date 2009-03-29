@@ -39,6 +39,7 @@ let s:GdbVarWinName = g:GdbVarWinName
 
 let s:GdbCmdWinBufNum = -1
 let s:GdbStackWinBufNum = -1
+let s:gdbNametoBufNumMap = {}
 
 let s:userMappings = {}
 
@@ -64,7 +65,7 @@ function! s:GdbInitWork( )
     " We have a choice here... We can either start a separate xterm which
     " shows the contents
     if g:GdbShowAsyncOutputWindow
-        silent! exec '!xterm -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
+        silent! exec '!xterm -T GDB -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
         silent! sleep 2
     else
         python from VimGdbServer import startVimServerThread
@@ -118,16 +119,22 @@ endfunction " }}}
 " window at the very top of the window.
 
 " We use a map with a constant value of 1 to simulate a set.
-let s:gdbBufNums = {}
 function! gdb#gdb#GdbOpenWindow(bufName)
-    let bufnum = bufnr(a:bufName, 1)
-    let s:gdbBufNums[bufnum] = 1
+    let bufnum = get(s:gdbNametoBufNumMap, a:bufName, -1)
+
+    if bufnum == -1
+        " bufnr(name, 1) sometimes creates new buffers with the same name
+        " if the local directory changes etc. The presence of multiple
+        " buffers with the same name really confuses things.
+        let bufnum = bufnr(a:bufName, 1)
+        let s:gdbNametoBufNumMap[a:bufName] = bufnum
+    endif
 
     let winnum = bufwinnr(bufnum)
     if winnum != -1
         exec winnum.' wincmd w'
     else
-        for n in keys(s:gdbBufNums)
+        for n in values(s:gdbNametoBufNumMap)
             " the bizzare dual nature of Vim's data types. Yuck!
             let winnum = bufwinnr(n+0)
             if winnum != -1
@@ -152,7 +159,7 @@ endfunction " }}}
 " s:CloseAllGdbWindows: closes all open GDB windows {{{
 " Description: 
 function! s:CloseAllGdbWindows()
-    for n in keys(s:gdbBufNums)
+    for n in values(s:gdbNametoBufNumMap)
         exec 'silent! bdelete '.n
     endfor
 endfunction " }}}
@@ -458,6 +465,7 @@ endfunction " }}}
 " Description: 
 function! gdb#gdb#ExpandStack(numFrames)
     exec 'python gdbClient.expandStack('.a:numFrames.')'
+    setlocal nomod
 endfunction " }}}
 " gdb#gdb#ShowStack: shows current GDB stack {{{
 " Description:  
@@ -475,6 +483,7 @@ function! gdb#gdb#ShowStack()
     g/^\s*$/d_
 
     setlocal nowrap
+    setlocal nomod
 
     " set up a local map to go to the required frame.
     exec "nmap <buffer> <silent> <CR>           :call gdb#gdb#GotoSelectedFrame()<CR>"
@@ -947,7 +956,8 @@ function! s:OpenFile(file)
         " find the first listed buffer.
         let i = 1
         while i <= winnr('$')
-            if getbufvar(winbufnr(i), '&buflisted') != 0
+            if getbufvar(winbufnr(i), '&buflisted') != 0 &&
+                \ bufname(winbufnr(i)) !~ '_GDB_'
                 let winnum = i
                 break
             endif

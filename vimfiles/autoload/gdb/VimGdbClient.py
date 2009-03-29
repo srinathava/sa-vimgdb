@@ -147,8 +147,9 @@ class VimGdbClient:
             vim.command('keepalt call gdb#gdb#UpdateCmdWin()')
 
     def printNewLines(self):
-        vim.current.buffer.append(self.newLines)
-        self.newLines = []
+        if self.newLines:
+            vim.current.buffer.append(self.newLines)
+            self.newLines = []
 
     def getSilentMiOutput(self, cmd):
         self.updateWindow = False
