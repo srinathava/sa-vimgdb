@@ -2,6 +2,7 @@ matlab_crash_dump*
 test/vartest
 gdbmiserver*.tgz
 *.sw?
+*.pyc
 .config
 java.log*
 .lesshst
