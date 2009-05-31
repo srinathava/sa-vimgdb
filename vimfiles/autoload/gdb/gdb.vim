@@ -59,6 +59,7 @@ function! s:GdbInitWork( )
     setlocal filetype=gdbvim
 
     python import sys
+    python import vim
     exec 'python sys.path += [r"'.s:scriptDir.'"]'
 
     " Start the GDBMI server...
