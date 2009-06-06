@@ -264,11 +264,12 @@ class VimGdbClient:
         changelist = obj.changelist
         for change in changelist:
             varname = change.name
+            vim.eval('Debug("marking %s as changed", "gdb")' % varname)
             in_scope = change.in_scope
             if in_scope == 'true':
                 # escaping / is necessary otherwise the vim command fails
                 # silently!
-                value = change.value.replace('/', r'\/')
+                value = str(change.value).replace('/', r'\/')
                 vim.command(r'g/{%s}$/s/<.\{-}>/<%s>/' % (varname, value))
                 vim.command(r'g/{%s}$/s/^ /c/' % varname)
             elif in_scope == 'false':
