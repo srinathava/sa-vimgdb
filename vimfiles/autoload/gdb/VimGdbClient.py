@@ -264,7 +264,6 @@ class VimGdbClient:
         changelist = obj.changelist
         for change in changelist:
             varname = change.name
-            vim.eval('Debug("marking %s as changed", "gdb")' % varname)
             in_scope = change.in_scope
             if in_scope == 'true':
                 # escaping / is necessary otherwise the vim command fails
