@@ -127,6 +127,25 @@ if __name__ == '__main__':
     for change in changelist:
         print change.name, 'changed to', change.value
 
+    print '========================='
+    input = r"""^done,changelist=[{name="var1",value="0x8ef6148",in_scope="true",type_changed="false"},{name="var1.name",value="0x8ef6168",in_scope="true",type_changed="false"},{name="var1.name.length",value="1",in_scope="true",type_changed="false"},{name="var1.name.buffer",value="0x8ef6178 \"f\"",in_scope="true",type_changed="false"},{name="var1.lineNumber",value="2",in_scope="true",type_changed="false"}]"""
+    output = parseGdbMi(input)
+    changelist = output.changelist
+    for change in changelist:
+        varname = change.name
+        in_scope = change.in_scope
+        if in_scope == 'true':
+            # escaping / is necessary otherwise the vim command fails
+            # silently!
+            value = str(change.value).replace('/', r'\/')
+            print(r'g/{%s}$/s/<.\{-}>/<%s>/' % (varname, value))
+            print(r'g/{%s}$/s/^ /c/' % varname)
+        elif in_scope == 'false':
+            print(r'g/{%s}$/s/^ /o/' % varname)
+        elif in_scope == 'invalid':
+            print(r'g/{%s}$/d_' % varname)
+
+    print '========================='
     input = r'^done,stack=[frame={level="190",addr="0x00002b8254e1dd17",func="??",from="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/bin/glnxa64/../../bin/glnxa64/libmwmcr.so"},frame={level="191",addr="0x00002b8254e1e0d4",func="??",from="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/bin/glnxa64/../../bin/glnxa64/libmwmcr.so"},frame={level="192",addr="0x0000000000402958",func="boost::function0<void, std::allocator<boost::function_base> >::(function0)",file="//mathworks/hub/3rdparty/R2009a/77023/glnxa64/boost/include/boost-1_35/boost/function/function_template.hpp",fullname="/mathworks/hub/3rdparty/R2009a/77023/glnxa64/boost/include/boost-1_35/boost/function/function_template.hpp",line="825"},frame={level="193",addr="0x00000000004024cc",func="mcrMain",file="matlab.cpp",fullname="/mathworks/BLR/devel/bat/Aslrtw/build/matlab/src/main/matlab.cpp",line="141"},frame={level="194",addr="0x00002b8254e4131c",func="??",from="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/bin/glnxa64/../../bin/glnxa64/libmwmcr.so"},frame={level="195",addr="0x00002b82562c8f1a",func="start_thread",from="/lib/libpthread.so.0"},frame={level="196",addr="0x00002b82564a1602",func="clone",from="/lib/libc.so.6"},frame={level="197",addr="0x0000000000000000",func="??"}]'
     obj = parseGdbMi(input)
 
@@ -151,3 +170,5 @@ if __name__ == '__main__':
 
     print '============='
     print '\n'.join(lines)
+
+    
