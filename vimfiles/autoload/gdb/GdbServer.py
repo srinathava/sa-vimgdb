@@ -29,6 +29,7 @@ class GdbServer:
     def __init__(self):
         self.gdbPromptPat = re.compile(r'prompt')
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
+        self.preCommandsPat = re.compile(r'pre-commands\r\n', re.DOTALL)
 
         self.reader = None
         self.socket = None
@@ -232,6 +233,14 @@ class GdbServer:
 
         return retval
 
+    def getCommands(self):
+        if self.conn:
+            retval = self.conn.recv(1024)
+        else:
+            retval = 'end'
+
+        return retval
+
     def flush(self): 
         # Send all the lines which the client has not yet consumed.
         if '\n' in self.newDataForClient:
@@ -251,6 +260,12 @@ class GdbServer:
         if m:
             query = m.group('query')
             reply = self.getQueryAnswer(query)
+            self.write(reply + '\n')
+            self.newDataTotal = ''
+
+        m = self.preCommandsPat.search(self.newDataTotal)
+        if m:
+            reply = self.getCommands()
             self.write(reply + '\n')
             self.newDataTotal = ''
 
