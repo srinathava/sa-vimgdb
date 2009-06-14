@@ -25,6 +25,9 @@ call gdb#gdb#Let('GdbCmdWinName', '_GDB_Command_Window_')
 call gdb#gdb#Let('GdbStackWinName', '_GDB_Stack_Window_')
 call gdb#gdb#Let('GdbVarWinName', '_GDB_Variables_Window')
 call gdb#gdb#Let('GdbShowAsyncOutputWindow', 1)
+call gdb#gdb#Let('GdbFileToRun', '')
+call gdb#gdb#Let('GdbRunOnStart', 1)
+call gdb#gdb#Let('GdbQuitOnProgramFinish', 0)
 
 " ==============================================================================
 " Script local variables
@@ -82,6 +85,14 @@ function! s:GdbInitWork( )
 
     " prevent stupid press <return> to continue prompts.
     call gdb#gdb#RunCommand('set height 0')
+
+	" If file is given, load it.
+	if g:GdbFileToRun != ''
+		let gdbFile = matchstr(g:GdbFileToRun, '^\S\+')
+		if gdbFile != ''
+			call gdb#gdb#RunCommand('file '.gdbFile)
+		endif
+	endif
     call gdb#gdb#RedoAllBreakpoints()
 
     augroup TerminateGdb
@@ -108,6 +119,14 @@ function! s:GdbInitWork( )
     call s:CreateGdbMaps()
 
     wincmd w
+
+	" Run the inferior. This needs to be done after all other stuff is done
+	" so that if we immediately come back after hitting a breakpoint, we
+	" are ready.
+	if g:GdbFileToRun != '' && g:GdbRunOnStart
+		let gdbRunArgs = matchstr(g:GdbFileToRun, '^\S\+\(\s\+\)\=\zs.*')
+		call gdb#gdb#ResumeProgram('run '.gdbRunArgs)		
+	end
 endfunction " }}}
 " gdb#gdb#Init: {{{
 function! gdb#gdb#Init()
@@ -254,6 +273,13 @@ function! gdb#gdb#OnResume()
     " probably just go to the current frame when this happens.
     " call Debug('+gdb#gdb#OnResume', 'gdb')
 
+	if g:GdbQuitOnProgramFinish
+		let progInfo = s:GdbGetCommandOutputSilent('info program')
+		if progInfo =~ 'not being run'
+			call gdb#gdb#Terminate()
+			return
+		endif
+	endif
     set balloonexpr=gdb#gdb#BalloonExpr()
 
     " We want to make sure that the command window shows the latest stuff
@@ -331,6 +357,8 @@ endfunction " }}}
 " gdb#gdb#Terminate: terminates the running GDB thread {{{
 function! gdb#gdb#Terminate()
     if s:gdbStarted == 1
+        sign unplace 1
+        set balloonexpr=
         python gdbClient.terminate()
         call s:RestoreUserMaps()
         call s:CloseAllGdbWindows()
@@ -756,8 +784,6 @@ function! gdb#gdb#Kill()
     call gdb#gdb#RunCommand('kill')
     let progInfo = s:GdbGetCommandOutputSilent('info program')
     if progInfo =~ 'is not being run'
-        sign unplace 1
-        set balloonexpr=
         call gdb#gdb#Terminate()
     else
         call gdb#gdb#OnResume()
