@@ -29,7 +29,8 @@ class GdbServer:
     def __init__(self):
         self.gdbPromptPat = re.compile(r'prompt')
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
-        self.preCommandsPat = re.compile(r'pre-commands\r\n', re.DOTALL)
+        self.preCommandsPat = re.compile(r'post-prompt\r\n(?P<query>.*)\r\npre-commands\r\n', re.DOTALL)
+        self.postCommandsPat = re.compile(r'pre-commands\r\n', re.DOTALL)
 
         self.reader = None
         self.socket = None
@@ -238,7 +239,6 @@ class GdbServer:
             retval = self.conn.recv(1024)
         else:
             retval = 'end'
-
         return retval
 
     def flush(self): 
@@ -263,11 +263,23 @@ class GdbServer:
             self.write(reply + '\n')
             self.newDataTotal = ''
 
-        m = self.preCommandsPat.search(self.newDataTotal)
-        if m:
+        if (self.preCommandsPat.search(self.newDataTotal) or
+            self.postCommandsPat.search(self.newDataTotal)):
             reply = self.getCommands()
             self.write(reply + '\n')
             self.newDataTotal = ''
+
+        # self.newDataTotal is used only to ensure that we catch the
+        # situation where GDB is asking for user input. As such we never
+        # need more than about 200 characters worth of text to figure that
+        # out. If self.newDataTotal grows too large, things get reeeally
+        # slow due to all the regexp matches... Hence its necessary to trim
+        # it down occassionally.
+        if self.gdbPromptPat.search(self.newDataTotal):
+            self.newDataTotal = ''
+
+        if len(self.newDataTotal) > 1000:
+            self.newDataTotal = self.newDataTotal[-200:0]
 
     def onReaderAboutToBeDone(self):
         # The reason for this additional thread to be created is to ensure
