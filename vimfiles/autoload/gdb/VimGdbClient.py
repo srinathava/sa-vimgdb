@@ -11,6 +11,8 @@ import time
 class VimGdbClient:
     def __init__(self):
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
+        self.preCommandsPat = re.compile(r'post-prompt\r\n(?P<query>.*)\r\npre-commands\r\n', re.DOTALL)
+        self.postCommandsPat = re.compile(r'pre-commands\r\n', re.DOTALL)
         self.newDataTotal = ''
         self.updateWindow = True
         self.toprint = ''
@@ -21,7 +23,8 @@ class VimGdbClient:
         self.logFile = '/tmp/gdbclient.log'
 
     def appendLog(self, msg):
-        open(self.logFile, 'a').write('%f: %s\n' % (time.time(), msg))
+        if 1:
+            open(self.logFile, 'a').write('%f: %s\n' % (time.time(), msg))
 
     def getReply(self, input):
         HOST = '127.0.0.1'        # The remote host
@@ -103,6 +106,12 @@ class VimGdbClient:
         vim.command(r'let retval = "%s\n"' % retval)
         return retval
 
+    def getCommands(self, query=''):
+        if query:
+            print query
+        ans = vim.eval('input("")')
+        return ans
+
     def onNewData(self, data):
         self.newDataTotal += data
 
@@ -112,6 +121,16 @@ class VimGdbClient:
                 query = m.group('query')
                 reply = self.getQueryAnswer(query)
                 self.newDataTotal = re.sub(self.queryPat, '', self.newDataTotal)
+                sendData(self.socket, reply)
+            m = self.preCommandsPat.search(self.newDataTotal)
+            if m:
+                reply = self.getCommands(m.group('query'))
+                self.newDataTotal = re.sub(self.preCommandsPat, '', self.newDataTotal)
+                sendData(self.socket, reply)
+            m = self.postCommandsPat.search(self.newDataTotal)
+            if m:
+                reply = self.getCommands()
+                self.newDataTotal = re.sub(self.postCommandsPat, '', self.newDataTotal)
                 sendData(self.socket, reply)
 
         N = len('--GDB--EXIT--\n')
@@ -291,7 +310,6 @@ class VimGdbClient:
 
         obj = self.getParsedGdbMiOutput('-stack-list-frames %d %d' % (lastShownFrame, lastShownFrame+num-1))
         # ^done,stack=[frame={level="0",addr="0x0000000000400a1c",func="foo",file="vartest.cpp",fullname="/mathworks/home/savadhan/code/gdbmiserver/test/vartest.cpp",line="26"},frame={level="1",addr="0x0000000000400d01",func="main",file="vartest.cpp",fullname="/mathworks/home/savadhan/code/gdbmiserver/test/vartest.cpp",line="52"}]
-
 
         lastIsKnown = isEmpty or (not re.match(r'...skipping', vim.current.buffer[-2]))
 
