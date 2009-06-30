@@ -980,5 +980,10 @@ function! s:OpenFile(file)
     endif
 
 endfunction " }}}
+" gdb#gdb#GetVar: gets script local var {{{
+" Description: 
+function! gdb#gdb#GetVar(varName)
+    return s:{a:varName}
+endfunction " }}}
 
 " vim: fdm=marker
