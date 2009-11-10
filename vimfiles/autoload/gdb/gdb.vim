@@ -86,14 +86,14 @@ function! s:GdbInitWork( )
     " prevent stupid press <return> to continue prompts.
     call gdb#gdb#RunCommand('set height 0')
 
-	" If file is given, load it.
-	if g:GdbFileToRun != ''
-		let gdbFile = matchstr(g:GdbFileToRun, '^\S\+')
-		if gdbFile != ''
-			call gdb#gdb#RunCommand('file '.gdbFile)
-		endif
-	endif
-    call gdb#gdb#RedoAllBreakpoints()
+    " If file is given, load it.
+    if g:GdbFileToRun != ''
+        let gdbFile = matchstr(g:GdbFileToRun, '^\S\+')
+        if gdbFile != ''
+            call gdb#gdb#RunCommand('file '.gdbFile)
+            call gdb#gdb#RedoAllBreakpoints()
+        endif
+    endif
 
     augroup TerminateGdb
         au!
@@ -147,7 +147,6 @@ function! gdb#gdb#GdbOpenWindow(bufName)
         " if the local directory changes etc. The presence of multiple
         " buffers with the same name really confuses things.
         let bufnum = bufnr(a:bufName, 1)
-        let s:gdbNametoBufNumMap[a:bufName] = bufnum
     endif
 
     let winnum = bufwinnr(bufnum)
@@ -159,7 +158,7 @@ function! gdb#gdb#GdbOpenWindow(bufName)
             let winnum = bufwinnr(n+0)
             if winnum != -1
                 exec winnum.' wincmd w'
-                exec 'vert split '.a:bufName
+                exec 'vert split #'.bufnum
                 break
             endif
         endfor
@@ -168,6 +167,15 @@ function! gdb#gdb#GdbOpenWindow(bufName)
             resize 10
         endif
     endif
+
+    " Strangely enough, this sometimes seems to change! i.e, doing
+    "
+    "       :top split #14
+    "
+    " will give a window with a buffer number of 22! This is probably a VIM
+    " bug.
+    let bufnum = bufnr('%')
+    let s:gdbNametoBufNumMap[a:bufName] = bufnum
 
     call setbufvar(bufnum, '&swapfile', 0)
     call setbufvar(bufnum, '&buflisted', 0)
@@ -232,6 +240,18 @@ function! gdb#gdb#Panic()
         set balloonexpr=
         let s:gdbStarted = 0
     endif
+endfunction " }}}
+" gdb#gdb#ShowCmdWindow:  {{{
+" Description: 
+function! gdb#gdb#ShowCmdWindow()
+    if s:gdbStarted != 1
+        echohl Search
+        echomsg "Gdb is not started!"
+        echohl None
+        return
+    endif
+    let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
+    setlocal filetype=gdbvim
 endfunction " }}}
 
 " ==============================================================================
@@ -707,6 +727,7 @@ function! gdb#gdb#Attach(pid)
         call s:GdbInitWork()
     endif
     call gdb#gdb#RunCommand('attach '.pid)
+    call gdb#gdb#RedoAllBreakpoints()
 endfunction " }}}
 " gdb#gdb#ResumeProgram: gives control back to the inferior program {{{
 " Description: This should be used for GDB commands which could potentially

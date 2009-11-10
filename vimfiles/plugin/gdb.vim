@@ -1,5 +1,7 @@
 if has('gui_running')
-    amenu &Gdb.Start\ Gdb   :call gdb#gdb#Init()<CR>
+    amenu &Gdb.Start\ Gdb               :call gdb#gdb#Init()<CR>
+    amenu &Gdb.Show\ Command\ Window    :call gdb#gdb#ShowCmdWindow()<CR>
+
     amenu &Gdb.&Step        :call gdb#gdb#Step()<CR>
     amenu &Gdb.&Next        :call gdb#gdb#Next()<CR>
     amenu &Gdb.&Finish      :call gdb#gdb#Finish()<CR>
