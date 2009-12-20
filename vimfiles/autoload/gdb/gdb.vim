@@ -694,7 +694,7 @@ endfunction " }}}
 " s:GetPidFromName: gets the PID from the name of a program {{{
 " Description: 
 function! s:GetPidFromName(name)
-    let ps = system('ps -u '.$USER.' | grep '.a:name)
+    let ps = system('ps -u '.$USER.' | grep '.a:name.' | grep -v "<defunct>"')
     if ps == ''
         echohl ErrorMsg
         echo "No running '".a:name."' process found"
