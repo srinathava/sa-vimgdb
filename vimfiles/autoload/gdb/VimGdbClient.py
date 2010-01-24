@@ -192,11 +192,12 @@ class VimGdbClient:
             out = self.getParsedGdbMiOutput('-stack-info-frame')
             file = out.frame.fullname
             line = out.frame.line
+            level = out.frame.level
             # ^done,frame={level="0",addr="0x00002aaab80758c5",func="cdr_transform_driver_pre_core",file="cdr/cdr_transform_driver.cpp",fullname="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/toolbox/stateflow/src/stateflow/cdr/cdr_transform_driver.cpp",line="263"}
         except:
             return
 
-
+        vim.eval('gdb#gdb#RefreshStackPtr(%d)' % level)
         vim.eval('gdb#gdb#PlaceSign("%s", %d)' % (file, line))
 
     def isBusy(self):
@@ -317,7 +318,7 @@ class VimGdbClient:
         for item in obj.stack:
             frame = item.frame
             if 'fullname' in frame.__dict__:
-                lines.append('#%-3d %s(...) at %s:%d' % (frame.level, frame.func, frame.fullname, frame.line))
+                lines.append('  #%-3d %s(...) at %s:%d' % (frame.level, frame.func, frame.fullname, frame.line))
                 lastIsKnown = True
 
             else:
@@ -326,10 +327,10 @@ class VimGdbClient:
                         lines.append('...skipping frames with no source information...')
 
                 elif 'from' in frame.__dict__:
-                    lines.append('#%-3d ?? from ...%s' % (frame.level, frame.__dict__['from'][-20:]))
+                    lines.append('  #%-3d ?? from ...%s' % (frame.level, frame.__dict__['from'][-20:]))
 
                 else:
-                    lines.append('#%-3d ??' % frame.level)
+                    lines.append('  #%-3d ??' % frame.level)
 
                 lastIsKnown = False
 

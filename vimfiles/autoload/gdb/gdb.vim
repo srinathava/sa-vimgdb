@@ -525,6 +525,7 @@ function! gdb#gdb#ShowStack()
     endif
 
     let s:GdbStackWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbStackWinName)
+    let b:GdbStackWindow = 1
     " remove original stuff.
     % d _
     python gdbClient.expandStack(10)
@@ -539,6 +540,9 @@ function! gdb#gdb#ShowStack()
     exec "nmap <buffer> <silent> <2-LeftMouse>  :call gdb#gdb#GotoSelectedFrame()<CR>"
     exec "nmap <buffer> <silent> <tab> :call gdb#gdb#ExpandStack(10)<CR>"
     exec "nmap <buffer> <silent> <C-tab> :call gdb#gdb#ExpandStack(9999)<CR>"
+
+    call matchadd('Search', '^>.*')
+    call gdb#gdb#RefreshStackPtr(0)
 endfunction " }}}
 " gdb#gdb#RefreshStack: refreshes stack trace shown {{{
 " Description: 
@@ -546,6 +550,15 @@ function! gdb#gdb#RefreshStack()
     if bufwinnr(s:GdbStackWinBufNum) != -1
         call gdb#gdb#ShowStack()
     endif
+endfunction " }}}
+" gdb#gdb#RefreshStackPtr: refreshes the stack ptr in the stack window {{{
+" Description: 
+function! gdb#gdb#RefreshStackPtr(stackNum)
+    if bufwinnr(s:GdbStackWinBufNum) != -1
+        let s:GdbStackWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbStackWinName)
+        silent! % s/^>/ /e
+        exec 'silent! % s/^ \(\s*#'.a:stackNum.'\)/>\1/e'
+    endif 
 endfunction " }}}
 
 " ==============================================================================
