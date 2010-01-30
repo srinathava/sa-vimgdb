@@ -68,7 +68,13 @@ function! s:GdbInitWork( )
     " Start the GDBMI server...
     " We have a choice here... We can either start a separate xterm which
     " shows the contents
-    if g:GdbShowAsyncOutputWindow
+    if has('gui_running') && g:GdbShowAsyncOutputWindow
+        if v:servername == ''
+            echohl Error
+            echomsg "Gui is running but v:servername is empty. This is not supported"
+            echohl None
+            return
+        end
         silent! exec '!xterm -T GDB -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
         silent! sleep 2
     else
@@ -78,7 +84,7 @@ function! s:GdbInitWork( )
 
     python from VimGdbClient import VimGdbClient
     python gdbClient = VimGdbClient()
-    python gdbClient.getReply('FLUSH')
+    python gdbClient.flush()
     
     " delete all empty lines.
     exec 'g/^\s*$/d_'
@@ -293,19 +299,19 @@ function! gdb#gdb#OnResume()
     " probably just go to the current frame when this happens.
     " call Debug('+gdb#gdb#OnResume', 'gdb')
 
-	if g:GdbQuitOnProgramFinish
-		let progInfo = s:GdbGetCommandOutputSilent('info program')
-		if progInfo =~ 'not being run'
-			call gdb#gdb#Terminate()
-			return
-		endif
-	endif
+    if g:GdbQuitOnProgramFinish
+        let progInfo = s:GdbGetCommandOutputSilent('info program')
+        if progInfo =~ 'not being run'
+            call gdb#gdb#Terminate()
+            return
+        endif
+    endif
     set balloonexpr=gdb#gdb#BalloonExpr()
 
     " We want to make sure that the command window shows the latest stuff
     " when we are given control. Too bad if the user is busy typing
     " something while this is going on.
-    python gdbClient.getReply('FLUSH')
+    python gdbClient.flush()
     call gdb#gdb#UpdateCmdWin()
     call gdb#gdb#GotoCurFrame()
 

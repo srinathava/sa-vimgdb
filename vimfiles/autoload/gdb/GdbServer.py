@@ -249,7 +249,7 @@ class GdbServer:
             self.newDataForClient = lines[-1]
 
     def onNewData(self, data):
-        sys.stdout.write(data)
+        # sys.stdout.write(data)
         if self.conn:
             sendData(self.conn, data)
         else:

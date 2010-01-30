@@ -18,6 +18,7 @@ class VimGdbClient:
         self.toprint = ''
         self.socket = None
         self.queryAnswer = None
+        self.isFlushing = False
 
         self.log = cStringIO.StringIO()
         self.logFile = '/tmp/gdbclient.log'
@@ -67,8 +68,6 @@ class VimGdbClient:
 
             self.onNewData(data)
 
-        # print 'Client shutting down connection'
-        self.appendLog('Closing client connection')
         self.socket.shutdown(2)
         self.socket.close()
         del self.socket
@@ -82,6 +81,7 @@ class VimGdbClient:
     def resumeProgram(self, cmd):
         self.newDataTotal = ''
         self.getReply('ASYNC ' + cmd)
+        self.appendLog('getting resume reply: [%s]' % self.newDataTotal)
         return self.newDataTotal
 
     def interrupt(self):
@@ -99,6 +99,7 @@ class VimGdbClient:
             return self.queryAnswer
 
         ch = int(vim.eval(r'confirm("%s", "&Yes\n&No")' % query))
+        self.appendLog('getting answer for query [%s] = %s' % (query, ch))
         if (ch == 1):
             retval = 'y'
         else:
@@ -115,7 +116,7 @@ class VimGdbClient:
     def onNewData(self, data):
         self.newDataTotal += data
 
-        if self.socket:
+        if (not self.isFlushing) and self.socket:
             m = self.queryPat.search(self.newDataTotal)
             if m:
                 query = m.group('query')
@@ -179,26 +180,13 @@ class VimGdbClient:
         lines = out.splitlines()
         for i in range(len(lines)):
             if re.match('^\^', lines[i]):
-                print >> self.log, "Getting output for '%s':\n%s\n" % (cmd, lines[i])
+                self.appendLog("Getting output for '%s':\n%s\n" % (cmd, lines[i]))
                 return lines[i]
 
         return ''
 
     def getParsedGdbMiOutput(self, cmd):
         return parseGdbMi(self.getSilentMiOutput(cmd))
-
-    def gotoCurrentFrame(self):
-        try:
-            out = self.getParsedGdbMiOutput('-stack-info-frame')
-            file = out.frame.fullname
-            line = out.frame.line
-            level = out.frame.level
-            # ^done,frame={level="0",addr="0x00002aaab80758c5",func="cdr_transform_driver_pre_core",file="cdr/cdr_transform_driver.cpp",fullname="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/toolbox/stateflow/src/stateflow/cdr/cdr_transform_driver.cpp",line="263"}
-        except:
-            return
-
-        vim.eval('gdb#gdb#RefreshStackPtr(%d)' % level)
-        vim.eval('gdb#gdb#PlaceSign("%s", %d)' % (file, line))
 
     def isBusy(self):
         self.updateWindow = False
@@ -213,6 +201,14 @@ class VimGdbClient:
     def terminate(self):
         self.getReply('DIE')
 
+    def flush(self):
+        self.isFlushing = True
+        self.getReply('FLUSH')
+        self.isFlushing = False
+
+    # ======================================================
+    # Variable stuff
+    # ======================================================
     def addGdbVar(self, expr):
         obj = self.getParsedGdbMiOutput('-var-create - @ %s' % expr)
         # ^done,name="var1",numchild="1",type="class CG::Scope *"
@@ -296,6 +292,22 @@ class VimGdbClient:
             elif in_scope == 'invalid':
                 vim.command(r'g/{%s}$/d_' % varname)
                 self.getSilentMiOutput('-var-delete %s' % varname)
+
+    # ======================================================
+    # Stack stuff
+    # ======================================================
+    def gotoCurrentFrame(self):
+        try:
+            out = self.getParsedGdbMiOutput('-stack-info-frame')
+            file = out.frame.fullname
+            line = out.frame.line
+            level = out.frame.level
+            # ^done,frame={level="0",addr="0x00002aaab80758c5",func="cdr_transform_driver_pre_core",file="cdr/cdr_transform_driver.cpp",fullname="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/toolbox/stateflow/src/stateflow/cdr/cdr_transform_driver.cpp",line="263"}
+        except:
+            return
+
+        vim.eval('gdb#gdb#RefreshStackPtr(%d)' % level)
+        vim.eval('gdb#gdb#PlaceSign("%s", %d)' % (file, line))
 
     def expandStack(self, num, skipUnknownFrames=True):
 

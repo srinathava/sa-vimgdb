@@ -3,6 +3,10 @@ import os
 import sys
 from threading import Thread
 import commands
+try:
+    import vim
+except:
+    pass
 
 class VimGdbServer(GdbServer):
     def __init__(self, vimServerName):
@@ -11,8 +15,13 @@ class VimGdbServer(GdbServer):
 
     def onResume(self):
         self.appendLog('sending onResume command to VIM')
-        cmd = "vim --servername %s --remote-expr 'gdb#gdb#OnResume()'" % self.vimServerName
-        commands.getoutput(cmd)
+
+        if self.vimServerName:
+            cmd = "vim --servername %s --remote-expr 'gdb#gdb#OnResume()'" % self.vimServerName
+            commands.getoutput(cmd)
+        else:
+            vim.eval('gdb#gdb#OnResume()')
+
         self.appendLog('done receiving reply from VIM about onResume')
 
 class VimServerThread(Thread):
