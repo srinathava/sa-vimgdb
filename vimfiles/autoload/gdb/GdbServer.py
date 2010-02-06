@@ -4,7 +4,8 @@ import pty, tty, select, os, sys
 import re
 import time
 from sockutils import *
-import traceback
+
+import logging
 
 class ReaderThread(Thread):
     def __init__(self, server, cmd):
@@ -16,8 +17,7 @@ class ReaderThread(Thread):
         try:
             self.run_try()
         except:
-            self.server.appendLog('Exception in reader thread')
-            self.server.printException()
+            self.server.exception('Exception in reader thread')
             raise
 
     def run_try(self):
@@ -26,7 +26,7 @@ class ReaderThread(Thread):
         self.server.onReaderAboutToBeDone()
 
 class GdbServer:
-    def __init__(self):
+    def __init__(self, runningInVim):
         self.gdbPromptPat = re.compile(r'prompt')
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
         self.preCommandsPat = re.compile(r'post-prompt\r\n(?P<query>.*)\r\npre-commands\r\n', re.DOTALL)
@@ -39,17 +39,27 @@ class GdbServer:
         self.newDataTotal = ''
         self.newDataForClient = ''
         self.resumeOnReaderDone = True
+        self.runningInVim = runningInVim
 
-        self.logfile = '/tmp/gdbmi.log'
+        if self.runningInVim:
+            self.logger = logging.getLogger('VimGdb.server')
+        else:
+            handler = logging.FileHandler('/tmp/GdbServer.log')
+            formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
+            handler.setFormatter(formatter)
 
-    def appendLog(self, msg):
-        open(self.logfile, 'a').write('%f: %s\n' % (time.time(), msg))
+            self.logger = logging.getLogger('GdbServer')
+            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.DEBUG)
 
-    def printException(self, maxTBlevel=5):
-        traceback.print_exc(file=open(self.logfile, 'a'))
+    def debug(self, msg):
+        self.logger.debug(msg)
+
+    def exception(self, msg):
+        self.logger.exception(msg)
 
     def closeConnection(self, reason):
-        self.appendLog('closing connection, reason = "%s", conn = %s' % (reason, self.conn))
+        self.debug('closing connection, reason = "%s", conn = %s' % (reason, self.conn))
         if self.conn:
             sendData(self.conn, reason+'\n')
             sendData(self.conn, '--GDB--EXIT--\n')
@@ -64,12 +74,11 @@ class GdbServer:
         try:
             self.run_try()
         except:
-            self.appendLog('Exception in main server loop!')
-            self.printException()
+            self.exception('Exception in main server loop!')
             raise
 
     def run_try(self):
-        self.appendLog('Starting GDB debugging ....')
+        self.debug('Starting GDB debugging ....')
 
         # Bind to port.
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -90,21 +99,19 @@ class GdbServer:
                 self.socket.listen(1)
                 self.conn, addr = self.socket.accept()
             except:
-                self.appendLog('Socket listening threw an exception!')
-                self.printException()
+                self.exception('Socket listening threw an exception!')
                 continue
 
             try:
                 data = self.conn.recv(1024)
             except:
-                self.appendLog('Socket accept threw an exception')
-                self.printException()
+                self.exception('Socket accept threw an exception')
                 break
 
             tokens = data.split(' ', 1)
             mode = tokens[0]
             command = ''.join(tokens[1:])
-            self.appendLog('getting mode = [%s], command [%s]' % (mode, command))
+            self.debug('getting mode = [%s], command [%s]' % (mode, command))
 
             if not re.match('INT|SETQA|SYNC|ASYNC|ISBUSY|DIE|FLUSH', mode):
                 self.closeConnection('WRONG_MODE')
@@ -112,7 +119,7 @@ class GdbServer:
 
             # client wants us to go away...
             if mode == 'DIE':
-                self.appendLog('Client wants us to go away...')
+                self.debug('Client wants us to go away...')
                 break
 
             if mode == 'SETQA':
@@ -146,7 +153,7 @@ class GdbServer:
 
             self.closeConnection('')
 
-        self.appendLog('Done with main server loop...')
+        self.debug('Done with main server loop...')
 
         # Done main server loop... Do cleanup...
         if self.reader and self.reader.isAlive():
@@ -249,7 +256,8 @@ class GdbServer:
             self.newDataForClient = lines[-1]
 
     def onNewData(self, data):
-        # sys.stdout.write(data)
+        if not self.runningInVim:
+            sys.stdout.write(data)
         if self.conn:
             sendData(self.conn, data)
         else:
@@ -341,6 +349,6 @@ class GdbServer:
         return self.readToGdbPrompt()
 
 if __name__ == "__main__":
-    s = GdbServer()
+    s = GdbServer(False)
     s.run()
 

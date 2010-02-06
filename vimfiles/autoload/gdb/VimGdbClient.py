@@ -8,6 +8,14 @@ from GdbMiParser import parseGdbMi
 import cStringIO
 import time
 
+import logging
+logger = logging.getLogger('VimGdb')
+handler = logging.FileHandler('/tmp/VimGdb.log')
+formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
+
 class VimGdbClient:
     def __init__(self):
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
@@ -20,14 +28,19 @@ class VimGdbClient:
         self.queryAnswer = None
         self.isFlushing = False
 
-        self.log = cStringIO.StringIO()
-        self.logFile = '/tmp/gdbclient.log'
+        self.logger = logging.getLogger('VimGdb.client')
 
-    def appendLog(self, msg):
-        if 1:
-            open(self.logFile, 'a').write('%f: %s\n' % (time.time(), msg))
+    def debug(self, msg):
+        self.logger.debug(msg)
 
     def getReply(self, input):
+        try:
+            return self.getReply_try(input)
+        except:
+            self.logger.exception('Exception in getting reply!')
+            raise
+
+    def getReply_try(self, input):
         HOST = '127.0.0.1'        # The remote host
         PORT = 50007              # The same port as used by the server
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -39,17 +52,17 @@ class VimGdbClient:
         maxEmptyPackets = 3
         nEmptyPackets = 0
 
-        self.appendLog('Sending message [%s]' % input)
+        self.debug('Sending message [%s]' % input)
         sendData(self.socket, input)
         self.stopReading = False
         while not self.stopReading:
             try:
                 data = self.socket.recv(1024)
                 if not data:
-                    self.appendLog('Timing out before receiving end marker')
+                    self.debug('Timing out before receiving end marker')
                     nEmptyPackets = nEmptyPackets + 1
                     if nEmptyPackets > maxEmptyPackets:
-                        self.appendLog('Too many empty packets recd. Breaking out of loop...')
+                        self.debug('Too many empty packets recd. Breaking out of loop...')
                         break
                     else:
                         # Try again after lazing around for a bit.
@@ -64,10 +77,12 @@ class VimGdbClient:
                     # Since we are trying to repeatedly ask for more data
                     # even after the socket might be closed by the server,
                     # we need to account for unforseen errors.
+                    self.logger.exception('Socket error reading from the server... breaking out of read loop')
                     break
 
             self.onNewData(data)
 
+        self.debug('Done getting reply from server... Closing socket')
         self.socket.shutdown(2)
         self.socket.close()
         del self.socket
@@ -75,13 +90,16 @@ class VimGdbClient:
 
     def runCommand(self, cmd):
         self.newDataTotal = ''
+        self.debug('+runCommand: %s' % cmd)
         self.getReply('SYNC ' + cmd)
+        self.debug('-runCommand: reply = %s' % self.newDataTotal)
         return self.newDataTotal
 
     def resumeProgram(self, cmd):
         self.newDataTotal = ''
+        self.debug('+resumeProgram: %s' % cmd)
         self.getReply('ASYNC ' + cmd)
-        self.appendLog('getting resume reply: [%s]' % self.newDataTotal)
+        self.debug('-resumeProgram: [%s]' % self.newDataTotal)
         return self.newDataTotal
 
     def interrupt(self):
@@ -99,7 +117,7 @@ class VimGdbClient:
             return self.queryAnswer
 
         ch = int(vim.eval(r'confirm("%s", "&Yes\n&No")' % query))
-        self.appendLog('getting answer for query [%s] = %s' % (query, ch))
+        self.debug('getting answer for query [%s] = %s' % (query, ch))
         if (ch == 1):
             retval = 'y'
         else:
@@ -180,7 +198,7 @@ class VimGdbClient:
         lines = out.splitlines()
         for i in range(len(lines)):
             if re.match('^\^', lines[i]):
-                self.appendLog("Getting output for '%s':\n%s\n" % (cmd, lines[i]))
+                self.debug("Getting output for '%s':\n%s\n" % (cmd, lines[i]))
                 return lines[i]
 
         return ''
@@ -189,6 +207,12 @@ class VimGdbClient:
         return parseGdbMi(self.getSilentMiOutput(cmd))
 
     def isBusy(self):
+        if self.socket:
+            # This function can sometimes get called when we are actually
+            # already in the middle of a conversation with the server. This
+            # mostly happens when the balloonexpr is being evaluated.
+            return 1
+
         self.updateWindow = False
         self.newDataTotal = ''
         self.getReply('ISBUSY')

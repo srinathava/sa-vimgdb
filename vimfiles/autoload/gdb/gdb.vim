@@ -223,10 +223,11 @@ function! s:CreateGdbMaps()
     call s:CreateMap('<C-c>',   ':call gdb#gdb#Interrupt()<CR>', 'n')
     call s:CreateMap('<F5>',    ':call gdb#gdb#Continue()<CR>', 'n')
     call s:CreateMap('<S-F5>',  ':call gdb#gdb#Kill()<CR>', 'n')
-    call s:CreateMap('<C-F5>',  ':call gdb#gdb#Interrupt()<CR>', 'n')
+    call s:CreateMap('<F6>',    ':call gdb#gdb#Kill()<CR>', 'n')
     call s:CreateMap('<F10>',   ':call gdb#gdb#Next()<CR>', 'n')
     call s:CreateMap('<F11>',   ':call gdb#gdb#Step()<CR>', 'n')
     call s:CreateMap('<S-F11>', ':call gdb#gdb#Finish()<CR>', 'n')
+    call s:CreateMap('<F12>',   ':call gdb#gdb#Finish()<CR>', 'n')
     call s:CreateMap('U',       ':call gdb#gdb#FrameUp()<CR>', 'n')
     call s:CreateMap('D',       ':call gdb#gdb#FrameDown()<CR>', 'n')
     call s:CreateMap('<F9>',    ':call gdb#gdb#ToggleBreakPoint()<CR>', 'n')
@@ -377,8 +378,14 @@ function! gdb#gdb#RunCommand(cmd)
     endif
 
     let pos = s:GetCurPos()
+    " Important to remove the ballooneval functionality while we are having
+    " a conversation with the server so that we do not mistakenly try to
+    " have multiple on going connections to it.
+    let oldBE = &ballooneval
+    set noballooneval
     exec 'python gdbClient.runCommand("""'.cmd.'""")'
     call s:SetCurPos(pos)
+    let &ballooneval = oldBE
 endfunction " }}}
 " gdb#gdb#Terminate: terminates the running GDB thread {{{
 function! gdb#gdb#Terminate()
@@ -563,7 +570,7 @@ function! gdb#gdb#RefreshStackPtr(stackNum)
     if bufwinnr(s:GdbStackWinBufNum) != -1
         let s:GdbStackWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbStackWinName)
         silent! % s/^>/ /e
-        exec 'silent! % s/^ \(\s*#'.a:stackNum.'\)/>\1/e'
+        exec 'silent! % s/^ \(\s*#'.a:stackNum.'\)\>/>\1/e'
     endif 
 endfunction " }}}
 
@@ -873,9 +880,6 @@ endfunction " }}}
 " ==============================================================================
 " Variable watching and expansion
 " ============================================================================== 
-" gdb#gdb#AddGdbVar: adds a GDB variable {{{
-" Description: 
-
 " gdb#gdb#OpenGdbVarsWindow:  {{{
 " Description: 
 let s:GdbVarWinBufNum = -1
@@ -895,6 +899,9 @@ function! gdb#gdb#OpenGdbVarsWindow()
     endif
 
 endfunction " }}}
+" gdb#gdb#AddGdbVar: adds a GDB variable {{{
+" Description: 
+
 function! gdb#gdb#AddGdbVar(inExpr)
     if s:GdbWarnIfBusy()
         return

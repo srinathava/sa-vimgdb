@@ -9,12 +9,12 @@ except:
     pass
 
 class VimGdbServer(GdbServer):
-    def __init__(self, vimServerName):
-        GdbServer.__init__(self)
+    def __init__(self, vimServerName, runningInVim):
+        GdbServer.__init__(self, runningInVim)
         self.vimServerName = vimServerName
 
     def onResume(self):
-        self.appendLog('sending onResume command to VIM')
+        self.debug('sending onResume command to VIM')
 
         if self.vimServerName:
             cmd = "vim --servername %s --remote-expr 'gdb#gdb#OnResume()'" % self.vimServerName
@@ -22,12 +22,12 @@ class VimGdbServer(GdbServer):
         else:
             vim.eval('gdb#gdb#OnResume()')
 
-        self.appendLog('done receiving reply from VIM about onResume')
+        self.debug('done receiving reply from VIM about onResume')
 
 class VimServerThread(Thread):
     def __init__(self, vimServerName):
         Thread.__init__(self)
-        self.server = VimGdbServer(vimServerName)
+        self.server = VimGdbServer(vimServerName, True)
 
     def run(self):
         self.server.run()
@@ -40,5 +40,5 @@ def startVimServerThread(serverName):
     time.sleep(0.4)
 
 if __name__ == '__main__':
-    s = VimGdbServer(sys.argv[1])
+    s = VimGdbServer(sys.argv[1], False)
     s.run()
