@@ -38,7 +38,7 @@ class VimGdbClient:
             return self.getReply_try(input)
         except:
             self.logger.exception('Exception in getting reply!')
-            raise
+            # raise
 
     def getReply_try(self, input):
         HOST = '127.0.0.1'        # The remote host
@@ -182,7 +182,7 @@ class VimGdbClient:
                 return
 
             self.newLines = lines
-            vim.command('keepalt call gdb#gdb#UpdateCmdWin()')
+            vim.command('call gdb#gdb#UpdateCmdWin()')
 
     def printNewLines(self):
         if self.newLines:

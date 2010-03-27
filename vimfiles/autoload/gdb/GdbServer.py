@@ -4,6 +4,7 @@ import pty, tty, select, os, sys
 import re
 import time
 from sockutils import *
+import mypexpect
 
 import logging
 
@@ -40,6 +41,7 @@ class GdbServer:
         self.newDataForClient = ''
         self.resumeOnReaderDone = True
         self.runningInVim = runningInVim
+        self.gdbShell = None
 
         if self.runningInVim:
             self.logger = logging.getLogger('VimGdb.server')
@@ -89,7 +91,7 @@ class GdbServer:
         self.socket.bind(('127.0.0.1', 50007))
 
         # Start GDB shell.
-        self.startGdbShell()
+        self.gdbShell = mypexpect.spawn('gdb --annotate 3')
         # read initial declaration from GDB.
         self.readToGdbPrompt()
 
@@ -158,21 +160,14 @@ class GdbServer:
         # Done main server loop... Do cleanup...
         if self.reader and self.reader.isAlive():
             # print 'Closing child reader threads...'
+            self.resumeOnReaderDone = False
             self.stopReading = True
             self.reader.join()
             self.reader = None
             self.stopReading = False
 
-        if self.pid:
-            # print 'Killing GDB process...'
-            os.kill(self.pid, 9)
-            self.pid = 0
-            
+        self.gdbShell.terminate()
         self.closeConnection('BYE')
-        self.socket.shutdown(2)
-        self.socket.close()
-        del self.socket
-        self.socket = None
 
     def interruptGdb(self):
         """
@@ -187,49 +182,11 @@ class GdbServer:
         # which comes after the interrupt. The second connection will just
         # hang till the first one is processed and done. 
         self.resumeOnReaderDone = False
-        try:
-            self.write(self.intr_key)
-        except KeyboardInterrupt:
-            pass
-
+        self.gdbShell.sendintr()
         # Wait for the async read thread to finish.
         if self.reader:
             self.reader.join()
             self.reader = None
-
-    def startGdbShell(self):
-        self.pid, self.fd = pty.fork( )
-
-        self.outd = self.fd
-        self.ind  = self.fd
-        self.errd = self.fd
-
-        if self.pid == 0:
-            attrs = tty.tcgetattr( 1 )
-            attrs[ 6 ][ tty.VMIN ]  = 1
-            attrs[ 6 ][ tty.VTIME ] = 0
-            attrs[ 0 ] = attrs[ 0 ] | tty.BRKINT
-            attrs[ 0 ] = attrs[ 0 ] & tty.IGNBRK
-            attrs[ 3 ] = attrs[ 3 ] & ~tty.ICANON & ~tty.ECHO
-            tty.tcsetattr( 1, tty.TCSANOW, attrs )
-
-            # os.execlp('./test_echo')
-            os.execlp('gdb', 'gdb', '--annotate', '3')
-
-        else:
-            try:
-                attrs = tty.tcgetattr( 1 )
-                termios_keys = attrs[ 6 ]
-
-            except:
-                return
-
-            self.eof_key   = termios_keys[ tty.VEOF ]
-            self.eol_key   = termios_keys[ tty.VEOL ]
-            self.erase_key = termios_keys[ tty.VERASE ]
-            self.intr_key  = termios_keys[ tty.VINTR ]
-            self.kill_key  = termios_keys[ tty.VKILL ]
-            self.susp_key  = termios_keys[ tty.VSUSP ]
 
     def getQueryAnswer(self, data):
         # If there is an alive connection, then just use that connection to
@@ -318,25 +275,23 @@ class GdbServer:
         pass
 
     def write(self, cmd):
-        os.write(self.ind, cmd)
+        self.gdbShell.send(cmd)
 
     def read(self, pat):
         total = ''
         while not self.stopReading:
-            r, w, e = select.select( [ self.outd ], [], [], 0.05 )
+            try:
+                data = self.gdbShell.read_nonblocking(timeout=0.05)
+            except mypexpect.TIMEOUT:
+                continue
+            except mypexpect.EOF:
+                return total
 
-            if not r:
-                if pat.search(total):
-                    return total
+            self.onNewData(data)
 
-            for file_iter in r:
-                data = os.read( self.outd, 32 )
-                if data == '':
-                    break
-
-                self.onNewData(data)
-
-                total += data
+            total += data
+            if pat.search(total):
+                return total
 
         return total
 
@@ -344,7 +299,7 @@ class GdbServer:
         return self.read(self.gdbPromptPat)
 
     def getReply(self, cmd):
-        self.onNewData(cmd + '\n')
+        # self.onNewData(cmd + '\n')
         self.write(cmd + '\n')
         return self.readToGdbPrompt()
 

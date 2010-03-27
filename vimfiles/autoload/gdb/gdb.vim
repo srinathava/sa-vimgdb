@@ -65,9 +65,6 @@ function! s:GdbInitWork( )
     python import vim
     exec 'python sys.path += [r"'.s:scriptDir.'"]'
 
-    " Start the GDBMI server...
-    " We have a choice here... We can either start a separate xterm which
-    " shows the contents
     if has('gui_running') && g:GdbShowAsyncOutputWindow
         if v:servername == ''
             echohl Error
@@ -86,11 +83,11 @@ function! s:GdbInitWork( )
     python gdbClient = VimGdbClient()
     python gdbClient.flush()
     
-    " delete all empty lines.
-    exec 'g/^\s*$/d_'
+    g/^\s*$/d_
 
     " prevent stupid press <return> to continue prompts.
-    call gdb#gdb#RunCommand('set height 0')
+    " call gdb#gdb#RunCommand('set height 0')
+    call s:GdbGetCommandOutputSilent('set height 0')
 
     " If file is given, load it.
     if g:GdbFileToRun != ''
@@ -124,19 +121,18 @@ function! s:GdbInitWork( )
 
     call s:CreateGdbMaps()
 
+    " Run the inferior. This needs to be done after all other stuff is done
+    " so that if we immediately come back after hitting a breakpoint, we
+    " are ready.
+    if g:GdbFileToRun != '' && g:GdbRunOnStart
+        let gdbRunArgs = matchstr(g:GdbFileToRun, '^\S\+\(\s\+\)\=\zs.*')
+        call gdb#gdb#ResumeProgram('run '.gdbRunArgs)		
+    end
     wincmd w
-
-	" Run the inferior. This needs to be done after all other stuff is done
-	" so that if we immediately come back after hitting a breakpoint, we
-	" are ready.
-	if g:GdbFileToRun != '' && g:GdbRunOnStart
-		let gdbRunArgs = matchstr(g:GdbFileToRun, '^\S\+\(\s\+\)\=\zs.*')
-		call gdb#gdb#ResumeProgram('run '.gdbRunArgs)		
-	end
 endfunction " }}}
 " gdb#gdb#Init: {{{
 function! gdb#gdb#Init()
-    keepalt call s:GdbInitWork()
+    call s:GdbInitWork()
 endfunction " }}}
 " gdb#gdb#GdbOpenWindow: opens one of the GDB windows {{{
 " Description: Open a new GDB window with the given name. We first attempt to
@@ -1010,12 +1006,12 @@ endfunction " }}}
 function! s:GetCurPos()
     let pos = getpos('.')
     let pos[0] = bufnr('%')
-    return getpos('.')
+    return pos
 endfunction " }}}
 " s:SetCurPos:  {{{
 " Description: 
 function! s:SetCurPos(pos)
-    let bufnr = a:pos[1]
+    let bufnr = a:pos[0]
     call s:OpenFile(bufname(bufnr))
     call setpos('.', a:pos)
 endfunction " }}}
