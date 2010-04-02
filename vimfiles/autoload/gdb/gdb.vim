@@ -944,9 +944,9 @@ function! gdb#gdb#ToggleGdbVar()
         return
     endif
 
-    if matchstr(getline('.'), '^\s*-') != ''
+    if matchstr(getline('.'), '^\(c\?\)\s*-') != ''
         call gdb#gdb#CollapseGdbVar()
-    elseif matchstr(getline('.'), '^\s*+') != ''
+    elseif matchstr(getline('.'), '^\(c\?\)\s*+') != ''
         call gdb#gdb#ExpandGdbVar()
     endif
 endfunction " }}}

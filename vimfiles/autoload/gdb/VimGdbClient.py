@@ -249,7 +249,7 @@ class VimGdbClient:
 
     def expandGdbVar(self):
         curLine = vim.current.line
-        m = re.search(r'^(\s*)\+.*{(\S+)}$', curLine)
+        m = re.search(r'^(c?\s*)\+.*{(\S+)}$', curLine)
         if m:
             curLine = re.sub(r'\+', '-', curLine, 1)
             vim.current.line = curLine
@@ -280,7 +280,7 @@ class VimGdbClient:
 
     def collapseGdbVar(self):
         curLine = vim.current.line
-        m = re.search(r'^(\s*)-.*{(\S+)}$', curLine)
+        m = re.search(r'^(c?\s*)-.*{(\S+)}$', curLine)
         if m:
             curLine = re.sub(r'-', '+', curLine, 1)
             vim.current.line = curLine
