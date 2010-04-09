@@ -46,19 +46,24 @@ class GdbServer:
         if self.runningInVim:
             self.logger = logging.getLogger('VimGdb.server')
         else:
-            handler = logging.FileHandler('/tmp/GdbServer.log')
-            formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
-            handler.setFormatter(formatter)
-
-            self.logger = logging.getLogger('GdbServer')
-            self.logger.addHandler(handler)
-            self.logger.setLevel(logging.DEBUG)
+            try:
+                handler = logging.FileHandler('/tmp/GdbServer.%s.%d.log' %
+                                              (os.getenv('USER'), os.getpid()))
+                formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
+                handler.setFormatter(formatter)
+                self.logger = logging.getLogger('GdbServer')
+                self.logger.addHandler(handler)
+                self.logger.setLevel(logging.DEBUG)
+            except:
+                self.logger = None
 
     def debug(self, msg):
-        self.logger.debug(msg)
+        if self.logger:
+            self.logger.debug(msg)
 
     def exception(self, msg):
-        self.logger.exception(msg)
+        if self.logger:
+            self.logger.exception(msg)
 
     def closeConnection(self, reason):
         self.debug('closing connection, reason = "%s", conn = %s' % (reason, self.conn))

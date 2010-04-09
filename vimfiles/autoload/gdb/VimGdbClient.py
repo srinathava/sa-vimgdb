@@ -7,14 +7,18 @@ from sockutils import *
 from GdbMiParser import parseGdbMi
 import cStringIO
 import time
+import os
 
 import logging
-logger = logging.getLogger('VimGdb')
-handler = logging.FileHandler('/tmp/VimGdb.log')
-formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
+try:
+    logger = logging.getLogger('VimGdb')
+    handler = logging.FileHandler('/tmp/VimGdb.%s.%d.log' % (os.getenv('USER'), os.getpid()))
+    formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+except:
+    pass
 
 class VimGdbClient:
     def __init__(self):
@@ -31,13 +35,18 @@ class VimGdbClient:
         self.logger = logging.getLogger('VimGdb.client')
 
     def debug(self, msg):
-        self.logger.debug(msg)
+        if self.logger:
+            self.logger.debug(msg)
+
+    def exception(self, msg):
+        if self.logger:
+            self.logger.exception(msg)
 
     def getReply(self, input):
         try:
             return self.getReply_try(input)
         except:
-            self.logger.exception('Exception in getting reply!')
+            self.exception('Exception in getting reply!')
             # raise
 
     def getReply_try(self, input):
@@ -77,7 +86,7 @@ class VimGdbClient:
                     # Since we are trying to repeatedly ask for more data
                     # even after the socket might be closed by the server,
                     # we need to account for unforseen errors.
-                    self.logger.exception('Socket error reading from the server... breaking out of read loop')
+                    self.exception('Socket error reading from the server... breaking out of read loop')
                     break
 
             self.onNewData(data)
