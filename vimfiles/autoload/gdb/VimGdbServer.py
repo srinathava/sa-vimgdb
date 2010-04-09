@@ -40,5 +40,21 @@ def startVimServerThread(serverName):
     time.sleep(0.4)
 
 if __name__ == '__main__':
+    from optparse import OptionParser
+
+    parser = OptionParser()
+    parser.add_option('-d', '--debug', dest="debug")
+    (opts, args) = parser.parse_args()
+
+    if opts.debug:
+        import logging
+
+        logger = logging.getLogger('VimGdb')
+        handler = logging.FileHandler('/tmp/VimGdbServer.%s.%d.log' % (os.getenv('USER'), os.getpid()))
+        formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
+
     s = VimGdbServer(sys.argv[1], False)
     s.run()

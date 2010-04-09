@@ -10,15 +10,17 @@ import time
 import os
 
 import logging
-try:
-    logger = logging.getLogger('VimGdb')
-    handler = logging.FileHandler('/tmp/VimGdb.%s.%d.log' % (os.getenv('USER'), os.getpid()))
-    formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
-except:
-    pass
+
+def initLogging():
+    try:
+        logger = logging.getLogger('VimGdb')
+        handler = logging.FileHandler('/tmp/VimGdb.%s.%d.log' % (os.getenv('USER'), os.getpid()))
+        formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
+    except:
+        pass
 
 class VimGdbClient:
     def __init__(self):
