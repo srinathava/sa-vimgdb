@@ -28,6 +28,7 @@ call gdb#gdb#Let('GdbShowAsyncOutputWindow', 1)
 call gdb#gdb#Let('GdbFileToRun', '')
 call gdb#gdb#Let('GdbRunOnStart', 1)
 call gdb#gdb#Let('GdbQuitOnProgramFinish', 0)
+call gdb#gdb#Let('GdbLogging', 0)
 
 " ==============================================================================
 " Script local variables
@@ -64,6 +65,11 @@ function! s:GdbInitWork( )
     python import sys
     python import vim
     exec 'python sys.path += [r"'.s:scriptDir.'"]'
+    python from VimGdbClient import VimGdbClient, initLogging
+
+    if g:GdbLogging
+        py initLogging()
+    end
 
     if has('gui_running') && g:GdbShowAsyncOutputWindow
         if v:servername == ''
@@ -72,14 +78,14 @@ function! s:GdbInitWork( )
             echohl None
             return
         end
-        silent! exec '!xterm -T GDB -e python '.s:scriptDir.'/VimGdbServer.py '.v:servername.' &'
+        let loggingArg = g:GdbLogging ? ' --debug ' : ''
+        silent! exec '!xterm -T GDB -e python '.s:scriptDir.'/VimGdbServer.py '.loggingArg.v:servername.' &'
         silent! sleep 2
     else
         python from VimGdbServer import startVimServerThread
         exec 'python startVimServerThread("'.v:servername.'")'
     endif
 
-    python from VimGdbClient import VimGdbClient
     python gdbClient = VimGdbClient()
     python gdbClient.flush()
     
@@ -944,9 +950,9 @@ function! gdb#gdb#ToggleGdbVar()
         return
     endif
 
-    if matchstr(getline('.'), '^\s*-') != ''
+    if matchstr(getline('.'), '^\(c\?\)\s*-') != ''
         call gdb#gdb#CollapseGdbVar()
-    elseif matchstr(getline('.'), '^\s*+') != ''
+    elseif matchstr(getline('.'), '^\(c\?\)\s*+') != ''
         call gdb#gdb#ExpandGdbVar()
     endif
 endfunction " }}}
