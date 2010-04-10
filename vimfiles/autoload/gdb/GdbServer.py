@@ -1,8 +1,7 @@
 from threading import Thread, Timer
 import socket
-import pty, tty, select, os, sys
+import os, sys
 import re
-import time
 from sockutils import *
 import mypexpect
 
