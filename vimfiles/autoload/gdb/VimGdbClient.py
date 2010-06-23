@@ -348,15 +348,15 @@ class VimGdbClient:
 
         isEmpty = len(vim.current.buffer) == 1 and vim.current.buffer[-1] == ''
 
-        lastShownFrame = 0
+        nextFrameToShow = 0
         if not isEmpty:
-            m_last = re.search(r'last shown frame = (\d+)', vim.current.buffer[-1])
+            m_last = re.search(r'next frame to show = (\d+)', vim.current.buffer[-1])
             if m_last:
-                lastShownFrame = int(m_last.group(1))
+                nextFrameToShow = int(m_last.group(1))
             else:
                 return
 
-        obj = self.getParsedGdbMiOutput('-stack-list-frames %d %d' % (lastShownFrame, lastShownFrame+num-1))
+        obj = self.getParsedGdbMiOutput('-stack-list-frames %d %d' % (nextFrameToShow, nextFrameToShow+num-1))
         # ^done,stack=[frame={level="0",addr="0x0000000000400a1c",func="foo",file="vartest.cpp",fullname="/mathworks/home/savadhan/code/gdbmiserver/test/vartest.cpp",line="26"},frame={level="1",addr="0x0000000000400d01",func="main",file="vartest.cpp",fullname="/mathworks/home/savadhan/code/gdbmiserver/test/vartest.cpp",line="52"}]
 
         lastIsKnown = isEmpty or (not re.match(r'...skipping', vim.current.buffer[-2]))
@@ -381,10 +381,10 @@ class VimGdbClient:
 
                 lastIsKnown = False
 
-        # remove the last line. We'll replace it with the updated lastShownFrame
+        # remove the last line. We'll replace it with the updated nextFrameToShow
         vim.current.buffer[-1:] = []
         if lines:
             vim.current.buffer.append(lines)
         if len(obj.stack) == num:
-            vim.current.buffer.append('" Press <tab> for more frames... (last shown frame = %d)' % (lastShownFrame + num - 1))
+            vim.current.buffer.append('" Press <tab> for more frames... (next frame to show = %d)' % (nextFrameToShow + num))
 
