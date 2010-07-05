@@ -16,7 +16,7 @@ if has('gui_running')
     amenu &Gdb.&Up\ Stack               :call gdb#gdb#FrameUp()<CR>
     amenu &Gdb.&Down\ Stack             :call gdb#gdb#FrameDown()<CR>
     amenu &Gdb.&Goto\ Frame             :call gdb#gdb#FrameN(-1)<CR>
-    amenu &Gdb.Show\ Stack              :call gdb#gdb#ShowStack()<CR>
+    amenu &Gdb.Sho&w\ Stack             :call gdb#gdb#ShowStack()<CR>
     amenu &Gdb.Expand\ Full\ Stack      :call gdb#gdb#ExpandStack(9999)<CR>
     amenu &Gdb.Goto\ Current\ Frame     :call gdb#gdb#GotoCurFrame()<CR>
 
