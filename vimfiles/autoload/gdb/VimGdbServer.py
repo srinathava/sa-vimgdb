@@ -38,6 +38,8 @@ def startVimServerThread(serverName):
     s.start()
     # wait a bit for the server to start serving.
     time.sleep(0.4)
+    # return the port number
+    return s.server.socket.getsockname()[1]
 
 if __name__ == '__main__':
     from optparse import OptionParser

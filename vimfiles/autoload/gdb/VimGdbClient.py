@@ -23,7 +23,7 @@ def initLogging():
         pass
 
 class VimGdbClient:
-    def __init__(self):
+    def __init__(self, portNum):
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
         self.preCommandsPat = re.compile(r'post-prompt\r\n(?P<query>.*)\r\npre-commands\r\n', re.DOTALL)
         self.postCommandsPat = re.compile(r'pre-commands\r\n', re.DOTALL)
@@ -33,6 +33,7 @@ class VimGdbClient:
         self.socket = None
         self.queryAnswer = None
         self.isFlushing = False
+        self.portNum = portNum
 
         self.logger = logging.getLogger('VimGdb.client')
 
@@ -53,7 +54,7 @@ class VimGdbClient:
 
     def getReply_try(self, input):
         HOST = '127.0.0.1'        # The remote host
-        PORT = 50007              # The same port as used by the server
+        PORT = self.portNum       # The same port as used by the server
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((HOST, PORT))
 

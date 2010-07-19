@@ -24,7 +24,7 @@ endfunction " }}}
 call gdb#gdb#Let('GdbCmdWinName', '_GDB_Command_Window_')
 call gdb#gdb#Let('GdbStackWinName', '_GDB_Stack_Window_')
 call gdb#gdb#Let('GdbVarWinName', '_GDB_Variables_Window')
-call gdb#gdb#Let('GdbShowAsyncOutputWindow', 1)
+call gdb#gdb#Let('GdbShowAsyncOutputWindow', 0)
 call gdb#gdb#Let('GdbFileToRun', '')
 call gdb#gdb#Let('GdbRunOnStart', 1)
 call gdb#gdb#Let('GdbQuitOnProgramFinish', 0)
@@ -83,10 +83,10 @@ function! s:GdbInitWork( )
         silent! sleep 2
     else
         python from VimGdbServer import startVimServerThread
-        exec 'python startVimServerThread("'.v:servername.'")'
+        exec 'python portNum = startVimServerThread("'.v:servername.'")'
     endif
 
-    python gdbClient = VimGdbClient()
+    python gdbClient = VimGdbClient(portNum)
     python gdbClient.flush()
     
     g/^\s*$/d_
