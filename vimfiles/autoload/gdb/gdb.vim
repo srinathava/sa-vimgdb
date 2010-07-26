@@ -518,6 +518,17 @@ function! gdb#gdb#FrameN(frameNum)
 endfunction " }}}
 " gdb#gdb#GotoSelectedFrame: goes to the selected frame {{{
 function! gdb#gdb#GotoSelectedFrame()
+    if s:GdbWarnIfBusy()
+        let m = matchlist(getline('.'), ' at \(\f\+\):\(\d\+\)')
+        if len(m) > 0
+            let filename = m[1]
+            let filenumber = m[2]
+            call s:OpenFile(filename)
+            call cursor(filenumber, 1)
+        end
+        return
+    endif
+
     let frameNum = matchstr(getline('.'), '\d\+')
     if frameNum != ''
         call gdb#gdb#FrameN(frameNum)
