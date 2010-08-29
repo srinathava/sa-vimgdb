@@ -29,8 +29,7 @@ class GdbServer:
     def __init__(self, runningInVim):
         self.gdbPromptPat = re.compile(r'prompt')
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
-        self.preCommandsPat = re.compile(r'post-prompt\r\n(?P<query>.*)\r\npre-commands\r\n', re.DOTALL)
-        self.postCommandsPat = re.compile(r'pre-commands\r\n', re.DOTALL)
+        self.preCommandsPat = re.compile(r'pre-commands\r\n(?P<query>.*)\r\ncommands\r\n', re.DOTALL)
 
         self.reader = None
         self.socket = None
@@ -223,8 +222,7 @@ class GdbServer:
             self.write(reply + '\n')
             self.newDataTotal = ''
 
-        if (self.preCommandsPat.search(self.newDataTotal) or
-            self.postCommandsPat.search(self.newDataTotal)):
+        if self.preCommandsPat.search(self.newDataTotal):
             reply = self.getCommands()
             self.write(reply + '\n')
             self.newDataTotal = ''
