@@ -25,8 +25,7 @@ def initLogging():
 class VimGdbClient:
     def __init__(self, portNum):
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
-        self.preCommandsPat = re.compile(r'post-prompt\r\n(?P<query>.*)\r\npre-commands\r\n', re.DOTALL)
-        self.postCommandsPat = re.compile(r'pre-commands\r\n', re.DOTALL)
+        self.preCommandsPat = re.compile(r'pre-commands\r\n(?P<query>.*)\r\ncommands\r\n', re.DOTALL)
         self.newDataTotal = ''
         self.updateWindow = True
         self.toprint = ''
@@ -138,13 +137,15 @@ class VimGdbClient:
         return retval
 
     def getCommands(self, query=''):
-        if query:
-            print query
-        ans = vim.eval('input("")')
+        ans = vim.eval('input("%s")' % query)
         return ans
 
     def onNewData(self, data):
+        self.debug('onNewData: data: %s' % repr(data))
         self.newDataTotal += data
+
+        if self.updateWindow:
+            self.printNewData(data)
 
         if (not self.isFlushing) and self.socket:
             m = self.queryPat.search(self.newDataTotal)
@@ -158,44 +159,39 @@ class VimGdbClient:
                 reply = self.getCommands(m.group('query'))
                 self.newDataTotal = re.sub(self.preCommandsPat, '', self.newDataTotal)
                 sendData(self.socket, reply)
-            m = self.postCommandsPat.search(self.newDataTotal)
-            if m:
-                reply = self.getCommands()
-                self.newDataTotal = re.sub(self.postCommandsPat, '', self.newDataTotal)
-                sendData(self.socket, reply)
 
-        N = len('--GDB--EXIT--\n')
-        if self.newDataTotal[-N:] == '--GDB--EXIT--\n':
+        if self.newDataTotal.endswith('--GDB--EXIT--\n'):
             self.stopReading = True
 
-        if self.updateWindow:
-            self.printNewData(data)
-
     def printNewData(self, data):
+        def isLinePrintable(line):
+            if not line:
+                return False
+
+            if (line.startswith('') or line.startswith('--GDB--EXIT--')):
+                return False
+
+            return True
+
         self.toprint += data
-        if '\n' in self.toprint:
-            newline = (self.toprint[-1] == '\n')
 
-            lines = self.toprint.splitlines()
-            lines = [line for line in lines if not re.match('', line) and line]
-            if not lines:
-                return
+        lines = self.toprint.splitlines()
 
-            if newline:
-                self.toprint = ''
-            else: 
-                self.toprint = lines[-1]
-                lines = lines[:-1]
+        # If the last line doesn't end with '\n', we cannot assume that it
+        # is full, it might only be partially transmitted.
+        if self.toprint.endswith('\n'):
+            fullLines = lines
+            rest = ''
+        else:
+            fullLines = lines[:-1]
+            rest = lines[-1]
 
-            if lines and lines[-1] == '--GDB--EXIT--':
-                lines = lines[:-1]
+        self.newLines = [line for line in fullLines if isLinePrintable(line)]
+        self.toprint = rest
 
-            if not lines:
-                return
-
-            self.newLines = lines
+        if self.newLines:
             vim.command('call gdb#gdb#UpdateCmdWin()')
-
+            
     def printNewLines(self):
         if self.newLines:
             vim.current.buffer.append(self.newLines)
