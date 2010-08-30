@@ -29,6 +29,7 @@ call gdb#gdb#Let('GdbFileToRun', '')
 call gdb#gdb#Let('GdbRunOnStart', 1)
 call gdb#gdb#Let('GdbQuitOnProgramFinish', 0)
 call gdb#gdb#Let('GdbLogging', 0)
+call gdb#gdb#Let('GdbCmd', 'gdb')
 
 " ==============================================================================
 " Script local variables
@@ -83,7 +84,7 @@ function! s:GdbInitWork( )
         silent! sleep 2
     else
         python from VimGdbServer import startVimServerThread
-        exec 'python portNum = startVimServerThread("'.v:servername.'")'
+        exec 'python portNum = startVimServerThread("'.v:servername.'", "'.g:GdbCmd.'")'
     endif
 
     python gdbClient = VimGdbClient(portNum)

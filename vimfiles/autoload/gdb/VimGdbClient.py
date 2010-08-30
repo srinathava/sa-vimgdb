@@ -177,6 +177,8 @@ class VimGdbClient:
 
         lines = self.toprint.splitlines()
 
+        # If the last line doesn't end with '\n', we cannot assume that it
+        # is full, it might only be partially transmitted.
         if self.toprint.endswith('\n'):
             fullLines = lines
             rest = ''

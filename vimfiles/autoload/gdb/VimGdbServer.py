@@ -9,8 +9,8 @@ except:
     pass
 
 class VimGdbServer(GdbServer):
-    def __init__(self, vimServerName, runningInVim):
-        GdbServer.__init__(self, runningInVim)
+    def __init__(self, vimServerName, runningInVim, gdbcmd):
+        GdbServer.__init__(self, runningInVim, gdbcmd)
         self.vimServerName = vimServerName
 
     def onResume(self):
@@ -25,16 +25,16 @@ class VimGdbServer(GdbServer):
         self.debug('done receiving reply from VIM about onResume')
 
 class VimServerThread(Thread):
-    def __init__(self, vimServerName):
+    def __init__(self, vimServerName, gdbcmd):
         Thread.__init__(self)
-        self.server = VimGdbServer(vimServerName, True)
+        self.server = VimGdbServer(vimServerName, True, gdbcmd)
 
     def run(self):
         self.server.run()
 
-def startVimServerThread(serverName):
+def startVimServerThread(serverName, gdbcmd):
     import time
-    s = VimServerThread(serverName)
+    s = VimServerThread(serverName, gdbcmd)
     s.start()
     # wait a bit for the server to start serving.
     time.sleep(0.4)
@@ -46,6 +46,7 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     parser.add_option('-d', '--debug', dest="debug")
+    parser.add_option('', '--gdbcmd', dest="gdbcmd", default="gdb")
     (opts, args) = parser.parse_args()
 
     if opts.debug:
@@ -58,5 +59,5 @@ if __name__ == '__main__':
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
 
-    s = VimGdbServer(sys.argv[1], False)
+    s = VimGdbServer(sys.argv[1], False, opts.gdbcmd)
     s.run()

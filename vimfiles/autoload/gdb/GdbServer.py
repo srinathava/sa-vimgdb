@@ -26,7 +26,7 @@ class ReaderThread(Thread):
         self.server.onReaderAboutToBeDone()
 
 class GdbServer:
-    def __init__(self, runningInVim):
+    def __init__(self, runningInVim, gdbcmd='gdb'):
         self.gdbPromptPat = re.compile(r'prompt')
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
         self.preCommandsPat = re.compile(r'pre-commands\r\n(?P<query>.*)\r\ncommands\r\n', re.DOTALL)
@@ -40,6 +40,7 @@ class GdbServer:
         self.resumeOnReaderDone = True
         self.runningInVim = runningInVim
         self.gdbShell = None
+        self.gdbcmd = gdbcmd
 
         self.logger = logging.getLogger('VimGdb.server')
 
@@ -85,7 +86,7 @@ class GdbServer:
         self.socket.bind(('127.0.0.1', 0))
 
         # Start GDB shell.
-        self.gdbShell = mypexpect.spawn('gdb --annotate 3')
+        self.gdbShell = mypexpect.spawn('%s --annotate 3' % self.gdbcmd)
         # read initial declaration from GDB.
         self.readToGdbPrompt()
 
@@ -300,7 +301,8 @@ if __name__ == "__main__":
     from optparse import OptionParser
 
     parser = OptionParser()
-    parser.add_option('-d', '--debug', dest="debug")
+    parser.add_option('-d', '--debug', dest="debug", default=False)
+    parser.add_option('', '--gdbcmd', dest="gdbcmd", default="gdb")
     (opts, args) = parser.parse_args()
 
     if opts.debug:
@@ -311,6 +313,6 @@ if __name__ == "__main__":
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
 
-    s = GdbServer(False)
+    s = GdbServer(False, opts.gdbcmd)
     s.run()
 
