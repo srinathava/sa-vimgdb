@@ -6,3 +6,5 @@ gdbmiserver*.tgz
 .config
 java.log*
 .lesshst
+.gdb_history
+.nfs*
