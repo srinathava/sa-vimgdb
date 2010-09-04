@@ -193,8 +193,13 @@ class TerminalServer:
             self.newDataForClient += data
 
         if self.needsUserInput(self.newDataTotal):
-            reply = self.getUserInput(self.newDataTotal)
-            self.write(reply)
+            if self.conn:
+                # If connection is alive, we assume that the client is
+                # going to give us the answer.
+                reply = self.conn.recv(1024)
+            else:
+                reply = self.getUserInput(self.newDataTotal)
+            self.write(reply.strip() + '\n')
 
     def onReaderAboutToBeDone(self):
         # The reason for this additional thread to be created is to ensure
@@ -230,7 +235,7 @@ class TerminalServer:
 
         while not self.stopReading:
             try:
-                data = self.shell.read_nonblocking(timeout=0.05)
+                data = self.shell.read_nonblocking(size=1024, timeout=0.2)
                 self.newDataTotal += data
             except mypexpect.TIMEOUT:
                 continue

@@ -29,7 +29,7 @@ call gdb#gdb#Let('GdbFileToRun', '')
 call gdb#gdb#Let('GdbRunOnStart', 1)
 call gdb#gdb#Let('GdbQuitOnProgramFinish', 0)
 call gdb#gdb#Let('GdbLogging', 0)
-call gdb#gdb#Let('GdbCmd', 'gdb')
+call gdb#gdb#Let('GdbCmd', 'gdb --annotate=3')
 
 " ==============================================================================
 " Script local variables

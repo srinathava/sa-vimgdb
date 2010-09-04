@@ -8,10 +8,6 @@ class GdbServer(TerminalServer):
         TerminalServer.__init__(self, cmd)
         self.queryAnswer = ''
 
-    def onNewData(self, data):
-        sys.stdout.write(data)
-        TerminalServer.onNewData(self, data)
-
     def getLoggerName(self):
         return 'VimGdb.Server'
 
@@ -23,7 +19,7 @@ class GdbServer(TerminalServer):
             self.queryAnswer = cmd
 
     def hasPromptArrived(self, data):
-        return data.endswith('prompt')
+        return data.endswith('prompt\r\n')
 
     def needsUserInput(self, data):
         return (data.endswith('query\r\n') or
@@ -38,6 +34,8 @@ class GdbServer(TerminalServer):
 
         if data.endswith('commands\r\n'):
             return 'end'
+
+        assert False, 'Illegal data input for getUserInput'
 
     def onResume(self):
         pass
@@ -58,6 +56,8 @@ if __name__ == "__main__":
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
+    else:
+        logging.basicConfig()
 
     s = GdbServer(opts.gdbcmd)
     s.run()
