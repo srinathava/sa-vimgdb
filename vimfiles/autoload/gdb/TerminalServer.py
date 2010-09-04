@@ -235,7 +235,7 @@ class TerminalServer:
 
         while not self.stopReading:
             try:
-                data = self.shell.read_nonblocking(size=1024, timeout=0.2)
+                data = self.shell.read_nonblocking(size=4096, timeout=0.2)
                 self.newDataTotal += data
             except mypexpect.TIMEOUT:
                 continue
