@@ -4,8 +4,8 @@ import logging
 import sys
 
 class GdbServer(TerminalServer):
-    def __init__(self, cmd='gdb --annotate=3'):
-        TerminalServer.__init__(self, cmd)
+    def __init__(self, cmd='gdb'):
+        TerminalServer.__init__(self, cmd + ' --annotate=3')
         self.queryAnswer = ''
 
     def getLoggerName(self):
@@ -46,7 +46,7 @@ if __name__ == "__main__":
 
     parser = OptionParser()
     parser.add_option('-d', '--debug', dest="debug", action="store_true", default=False)
-    parser.add_option('', '--gdbcmd', dest="gdbcmd", default="gdb --annotate=3")
+    parser.add_option('', '--gdbcmd', dest="gdbcmd", default="gdb")
     (opts, args) = parser.parse_args()
 
     if opts.debug:

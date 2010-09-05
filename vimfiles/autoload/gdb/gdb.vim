@@ -29,7 +29,7 @@ call gdb#gdb#Let('GdbFileToRun', '')
 call gdb#gdb#Let('GdbRunOnStart', 1)
 call gdb#gdb#Let('GdbQuitOnProgramFinish', 0)
 call gdb#gdb#Let('GdbLogging', 0)
-call gdb#gdb#Let('GdbCmd', 'gdb --annotate=3')
+call gdb#gdb#Let('GdbCmd', 'gdb')
 
 " ==============================================================================
 " Script local variables
@@ -68,9 +68,7 @@ function! s:GdbInitWork( )
     exec 'python sys.path += [r"'.s:scriptDir.'"]'
     python from VimGdbClient import VimGdbClient, initLogging
 
-    if g:GdbLogging
-        py initLogging()
-    end
+    exec 'py initLogging('.g:GdbLogging.')'
 
     if has('gui_running') && g:GdbShowAsyncOutputWindow
         if v:servername == ''

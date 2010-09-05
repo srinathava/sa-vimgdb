@@ -11,14 +11,17 @@ import os
 
 import logging
 
-def initLogging():
+def initLogging(logVerbose):
     try:
         logger = logging.getLogger('VimGdb')
         handler = logging.FileHandler('/tmp/VimGdb.%s.log' % os.getenv('USER'), mode='w')
         formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
-        logger.setLevel(logging.DEBUG)
+        if logVerbose:
+            logger.setLevel(logging.DEBUG)
+        else:
+            logger.setLevel(logging.ERROR)
     except:
         pass
 
