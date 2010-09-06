@@ -133,6 +133,9 @@ class TerminalServer:
             isBusy = self.reader and self.reader.isAlive() 
             if mode == 'INT':
                 if isBusy:
+                    # Need to close the connection first so that the client
+                    # doesn't see GDB output in weird out of order way.
+                    self.closeConnection('')
                     self.interrupt()
             elif isBusy:
                 self.closeConnection('BUSY')
