@@ -9,8 +9,8 @@ except:
     pass
 
 class VimGdbServer(GdbServer):
-    def __init__(self, vimServerName, runningInVim, gdbcmd):
-        GdbServer.__init__(self, runningInVim, gdbcmd)
+    def __init__(self, vimServerName, gdbcmd):
+        GdbServer.__init__(self, gdbcmd)
         self.vimServerName = vimServerName
 
     def onResume(self):
@@ -27,7 +27,7 @@ class VimGdbServer(GdbServer):
 class VimServerThread(Thread):
     def __init__(self, vimServerName, gdbcmd):
         Thread.__init__(self)
-        self.server = VimGdbServer(vimServerName, True, gdbcmd)
+        self.server = VimGdbServer(vimServerName, gdbcmd)
 
     def run(self):
         self.server.run()
@@ -59,5 +59,5 @@ if __name__ == '__main__':
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
 
-    s = VimGdbServer(sys.argv[1], False, opts.gdbcmd)
+    s = VimGdbServer(sys.argv[1], opts.gdbcmd)
     s.run()

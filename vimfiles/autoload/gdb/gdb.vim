@@ -68,9 +68,7 @@ function! s:GdbInitWork( )
     exec 'python sys.path += [r"'.s:scriptDir.'"]'
     python from VimGdbClient import VimGdbClient, initLogging
 
-    if g:GdbLogging
-        py initLogging()
-    end
+    exec 'py initLogging('.g:GdbLogging.')'
 
     if has('gui_running') && g:GdbShowAsyncOutputWindow
         if v:servername == ''
