@@ -250,7 +250,7 @@ class TerminalServer:
             if self.hasPromptArrived(self.newDataTotal):
                 return self.newDataTotal
 
-        return total
+        return self.newDataTotal
 
     def getReply(self, cmd):
         self.newDataTotal = ''

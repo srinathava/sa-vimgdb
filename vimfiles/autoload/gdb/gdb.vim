@@ -217,6 +217,21 @@ function! s:RestoreUserMaps()
             exec mode.'unmap '.lhs
         endif
     endfor
+    if exists('s:eofsigndefined')
+        sign unplace 7654
+    endif
+endfunction " }}}
+" gdb#gdb#CreateEofSign:  {{{
+" Description: 
+function! gdb#gdb#CreateEofSign()
+    if !exists('s:eofsigndefined')
+        let s:eofsigndefined = 1
+        sign define eof text=^D texthl=Search
+    endif
+    if !exists('b:GDBEofSignPlaced')
+        let b:GDBEofSignPlaced = 1
+        exec 'sign place 7654 name=eof line=99999 file='.expand('%:p')
+    endif
 endfunction " }}}
 " s:CreateGdbMaps: creates GDB specific mappings {{{
 " Description: 
@@ -234,6 +249,11 @@ function! s:CreateGdbMaps()
     call s:CreateMap('<F9>',    ':call gdb#gdb#ToggleBreakPoint()<CR>', 'n')
     call s:CreateMap('<C-P>',   ':call gdb#gdb#PrintExpr()<CR>', 'n')
     call s:CreateMap('<C-P>',   'y:call gdb#gdb#RunCommand("print <C-R>"")<CR>', 'v')
+
+    augroup CreateEofSign
+        au!
+        au BufEnter * :call gdb#gdb#CreateEofSign()
+    augroup END
 endfunction " }}}
 " gdb#gdb#Panic: If something went wrong {{{
 " Description: 
