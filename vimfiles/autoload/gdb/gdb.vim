@@ -230,7 +230,9 @@ function! gdb#gdb#CreateEofSign()
     endif
     if !exists('b:GDBEofSignPlaced')
         let b:GDBEofSignPlaced = 1
-        exec 'sign place 7654 name=eof line=99999 file='.expand('%:p')
+        if expand('%:p') != ''
+            exec 'sign place 7654 name=eof line=99999 file='.expand('%:p')
+        endif
     endif
 endfunction " }}}
 " s:CreateGdbMaps: creates GDB specific mappings {{{
