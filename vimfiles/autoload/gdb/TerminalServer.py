@@ -243,7 +243,7 @@ class TerminalServer:
             except mypexpect.TIMEOUT:
                 continue
             except mypexpect.EOF:
-                return total
+                return self.newDataTotal
 
             self.onNewData(data)
 
