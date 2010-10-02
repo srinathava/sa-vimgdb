@@ -3,6 +3,7 @@ import os
 import sys
 from threading import Thread
 import commands
+from subprocess import Popen, PIPE
 try:
     import vim
 except:
@@ -12,6 +13,20 @@ class VimGdbServer(GdbServer):
     def __init__(self, vimServerName, gdbcmd):
         GdbServer.__init__(self, gdbcmd)
         self.vimServerName = vimServerName
+
+    def getQueryAnswer(self, query):
+        self.debug('sending GetQueryAnswer for [%s] command to VIM' % query)
+
+        if self.vimServerName:
+            ans = Popen(['vim', '--servername', self.vimServerName, 
+                         '--remote-expr', 
+                         'gdb#gdb#GetQueryAnswer("%s")' % query], 
+                        stdout=PIPE).communicate()[0]
+        else:
+            ans = vim.eval('gdb#gdb#GetQueryAnswer("%s")' % query)
+
+        self.debug("done receiving reply '%s' from VIM about GetQueryAnswer" % ans)
+        return ans
 
     def onResume(self):
         self.debug('sending onResume command to VIM')

@@ -44,6 +44,7 @@ if has('gui_running')
     amenu &Gdb.Panic! :call gdb#gdb#Panic()<CR>
 
     amenu 80.5 PopUp.Run\ to\ cursor\ (GDB) :call gdb#gdb#Until()<CR>
+    amenu 80.5 PopUp.Jump\ to\ cursor\ (GDB) :call gdb#gdb#Jump()<CR>
     amenu 80.6 PopUp.Examine\ Data\ (GDB)   :call gdb#gdb#AddGdbVar('')<CR>
     amenu 80.7 PopUp.-sep-gdb0- <Nop>
 endif

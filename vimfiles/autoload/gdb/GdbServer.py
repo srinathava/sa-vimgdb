@@ -2,11 +2,13 @@ from TerminalServer import TerminalServer
 
 import logging
 import sys
+import re
 
 class GdbServer(TerminalServer):
     def __init__(self, cmd='gdb'):
         TerminalServer.__init__(self, cmd + ' --annotate=3')
         self.queryAnswer = ''
+        self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
 
     def getLoggerName(self):
         return 'VimGdb.Server'
@@ -27,15 +29,17 @@ class GdbServer(TerminalServer):
 
     def getUserInput(self, data):
         if data.endswith('query\r\n'):
-            if self.queryAnswer:
-                return self.queryAnswer
-            else:
-                return 'y'
+            m = self.queryPat.search(data)
+            query = m.group('query')
+            return self.getQueryAnswer(query)
 
         if data.endswith('commands\r\n'):
             return 'end'
 
         assert False, 'Illegal data input for getUserInput'
+
+    def getQueryAnswer(self, query):
+        return 'y'
 
     def onResume(self):
         pass
