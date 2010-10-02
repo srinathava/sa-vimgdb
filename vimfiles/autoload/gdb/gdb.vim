@@ -220,6 +220,14 @@ function! s:RestoreUserMaps()
     if exists('s:eofsigndefined')
         sign unplace 7654
     endif
+    augroup CreateEofSign
+        au!
+    augroup END
+endfunction " }}}
+" s:CreateEofSignForBuffer:  {{{
+" Description: 
+function! s:CreateEofSignForBuffer()
+    <+function body+>
 endfunction " }}}
 " gdb#gdb#CreateEofSign:  {{{
 " Description: 
