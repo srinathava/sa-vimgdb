@@ -361,9 +361,14 @@ function! gdb#gdb#OnResume()
 endfunction " }}}
 " gdb#gdb#GetQueryAnswer:  {{{
 " Description: 
-function! gdb#gdb#GetQueryAnswer()
-    python gdbClient.getQueryAnswer()
-    return retval
+function! gdb#gdb#GetQueryAnswer(query)
+    call foreground()
+    let ans = confirm(a:query, "&Yes\n&No")
+    if ans == 1
+        return 'y'
+    else
+        return 'n'
+    endif
 endfunction " }}}
 
 " ==============================================================================
@@ -853,6 +858,16 @@ function! gdb#gdb#Until()
     " we use Resume rather than Run because the program could potentially
     " never reach here.
     call gdb#gdb#ResumeProgram('until '.expand('%:p:t').':'.line('.'))
+endfunction " }}}
+" gdb#gdb#Jump: runs till cursor position {{{
+" Description: 
+function! gdb#gdb#Jump()
+    " we use Resume rather than Run because the program could potentially
+    " never reach here. It would have been nice to disable the breakpoint
+    " automatically if the user chose to not jump if gdb warns about it.
+    let linespec = expand('%:p:t').':'.line('.')
+    let breakInfo = s:GdbGetCommandOutputSilent('tbreak '.linespec)
+    call gdb#gdb#ResumeProgram('jump '.linespec)
 endfunction " }}}
 " gdb#gdb#Interrupt: interrupts the inferior program {{{
 function! gdb#gdb#Interrupt( )
