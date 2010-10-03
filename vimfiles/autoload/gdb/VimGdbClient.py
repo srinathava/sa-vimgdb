@@ -364,8 +364,14 @@ class VimGdbClient:
         lines = []
         for item in obj.stack:
             frame = item.frame
+            filename = ''
             if 'fullname' in frame.__dict__:
-                lines.append('  #%-3d %s(...) at %s:%d' % (frame.level, frame.func, frame.fullname, frame.line))
+                filename = frame.fullname
+            elif 'file' in frame.__dict__:
+                filename = frame.file
+
+            if filename:
+                lines.append('  #%-3d %s(...) at %s:%d' % (frame.level, frame.func, filename, frame.line))
                 lastIsKnown = True
 
             else:
