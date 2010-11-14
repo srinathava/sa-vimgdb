@@ -912,6 +912,7 @@ endfunction " }}}
 function! gdb#gdb#PrintExpr()
     let str = s:GetContingString(bufnr('%'), line('.'), col('.'))
     call gdb#gdb#RunCommand('print '.str)
+    call histadd('cmd', 'GDB print '.str)
 endfunction " }}}
 " s:GetContingString: returns the longest chain of struct refs {{{
 function! s:GetContingString(bufnr, lnum, col)
