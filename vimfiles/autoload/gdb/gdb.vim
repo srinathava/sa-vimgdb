@@ -257,8 +257,8 @@ function! s:CreateGdbMaps()
     call s:CreateMap('U',       ':call gdb#gdb#FrameUp()<CR>', 'n')
     call s:CreateMap('D',       ':call gdb#gdb#FrameDown()<CR>', 'n')
     call s:CreateMap('<F9>',    ':call gdb#gdb#ToggleBreakPoint()<CR>', 'n')
-    call s:CreateMap('<C-P>',   ':call gdb#gdb#PrintExpr()<CR>', 'n')
-    call s:CreateMap('<C-P>',   'y:call gdb#gdb#RunCommand("print <C-R>"")<CR>', 'v')
+    call s:CreateMap('<C-P>',   ':call gdb#gdb#PrintExpr(0)<CR>', 'n')
+    call s:CreateMap('<C-P>',   ':call gdb#gdb#PrintExpr(1)<CR>', 'v')
 
     augroup CreateEofSign
         au!
@@ -909,8 +909,17 @@ function! gdb#gdb#BalloonExpr()
 endfunction " }}}
 " gdb#gdb#PrintExpr: prints the expression under cursor {{{
 " Description:  
-function! gdb#gdb#PrintExpr()
-    let str = s:GetContingString(bufnr('%'), line('.'), col('.'))
+function! gdb#gdb#PrintExpr(isVisual)
+    if !a:isVisual
+        let str = s:GetContingString(bufnr('%'), line('.'), col('.'))
+    else
+        let pos1 = getpos("'<")
+        let pos2 = getpos("'>")
+        let lines = getline(pos1[1], pos2[1])
+        let lines[0] = strpart(lines[0], 0, pos2[2])
+        let lines[-1] = strpart(lines[0], pos1[2]-1)
+        let str = join(lines, ' ')
+    endif
     call gdb#gdb#RunCommand('print '.str)
     call histadd('cmd', 'GDB print '.str)
 endfunction " }}}
