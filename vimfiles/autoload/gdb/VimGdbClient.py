@@ -36,6 +36,7 @@ class VimGdbClient:
         self.queryAnswer = None
         self.isFlushing = False
         self.portNum = portNum
+        self.newLines = []
 
         self.logger = logging.getLogger('VimGdb.client')
 
