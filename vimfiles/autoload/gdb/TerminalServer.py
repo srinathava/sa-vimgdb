@@ -39,6 +39,27 @@ class TerminalServer:
 
         self.logger = logging.getLogger(self.getLoggerName())
 
+        self.debug('Starting server....')
+
+        # Bind to port.
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # The magic line below prevents the socket from throwing the
+        # "socket already in use" address which results in a timeout of
+        # about 30 seconds between successive invocations of this program.
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # Use 0 to let the OS give us an unused port number. Otherwise, we
+        # cannot have two simultaneous debugging sessions on the same
+        # machine!
+        self.socket.bind(('127.0.0.1', 0))
+
+        # Start GDB shell.
+        self.shell = mypexpect.spawn(self.cmd)
+
+        # read initial declaration from GDB.
+        self.readToPrompt()
+
     def debug(self, msg):
         self.logger.debug(msg)
 
@@ -65,27 +86,6 @@ class TerminalServer:
             raise
 
     def run_try(self):
-        self.debug('Starting server....')
-
-        # Bind to port.
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # The magic line below prevents the socket from throwing the
-        # "socket already in use" address which results in a timeout of
-        # about 30 seconds between successive invocations of this program.
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-        # Use 0 to let the OS give us an unused port number. Otherwise, we
-        # cannot have two simultaneous debugging sessions on the same
-        # machine!
-        self.socket.bind(('127.0.0.1', 0))
-
-        # Start GDB shell.
-        self.shell = mypexpect.spawn(self.cmd)
-
-        # read initial declaration from GDB.
-        self.readToPrompt()
-
         # Now wait for someone to ask us to do something...
         while 1:
             try:

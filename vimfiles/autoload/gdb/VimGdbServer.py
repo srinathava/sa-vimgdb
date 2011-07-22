@@ -51,8 +51,6 @@ def startVimServerThread(serverName, gdbcmd):
     import time
     s = VimServerThread(serverName, gdbcmd)
     s.start()
-    # wait a bit for the server to start serving.
-    time.sleep(0.4)
     # return the port number
     return s.server.socket.getsockname()[1]
 
