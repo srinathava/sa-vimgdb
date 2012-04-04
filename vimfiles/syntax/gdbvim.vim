@@ -10,7 +10,7 @@ endif
 runtime! syntax/gdb.vim
 unlet b:current_syntax
 
-" Highlite lines starting with '(gdb prompt)' or '>'
+" Highlite lines starting with '(gdb)' prompt or '>'
 syn match Prmpt display contained "([^)]\+)"
 
 syn match Command display "^([^)]\+)\|^>"
