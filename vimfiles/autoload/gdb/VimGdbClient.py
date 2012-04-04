@@ -54,12 +54,26 @@ class VimGdbClient:
         except:
             self.exception('Exception in getting reply!')
             # raise
-
-    def getReply_try(self, input):
+    
+    def tryConnect(self):
         HOST = '127.0.0.1'        # The remote host
         PORT = self.portNum       # The same port as used by the server
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((HOST, PORT))
+
+        numAttempts = 0
+        while numAttempts < 3:
+            try:
+                self.socket.connect((HOST, PORT))
+                return
+            except socket.error, (en, msg):
+                self.debug('Getting connection error %s (%s)' % (en, msg))
+
+            time.sleep(0.1)
+            numAttempts += 1
+
+
+    def getReply_try(self, input):
+        self.tryConnect()
 
         # If there's an empty packet, we keep trying 3 times after the
         # first empty packet just to ensure that the server is _really_
