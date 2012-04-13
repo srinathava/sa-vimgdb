@@ -62,6 +62,8 @@ function! s:GdbInitWork( )
     let s:gdbStarted = 1
     let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
     setlocal filetype=gdbvim
+    exec "nmap <buffer> <silent> <CR>           :call gdb#gdb#GotoSelectedFrame()<CR>"
+    exec "nmap <buffer> <silent> <2-LeftMouse>  :call gdb#gdb#GotoSelectedFrame()<CR>"
 
     python import sys
     python import vim
@@ -552,7 +554,7 @@ function! gdb#gdb#FrameN(frameNum)
 endfunction " }}}
 " gdb#gdb#GotoSelectedFrame: goes to the selected frame {{{
 function! gdb#gdb#GotoSelectedFrame()
-    if s:GdbWarnIfBusy()
+    if s:GdbWarnIfBusy() || getline('.') =~ '(M)\s*$'
         let m = matchlist(getline('.'), ' at \(\f\+\):\(\d\+\)')
         if len(m) > 0
             let filename = m[1]
