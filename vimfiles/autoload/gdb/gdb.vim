@@ -777,13 +777,47 @@ function! s:GetPidFromName(name)
         return ''
     end
 
-    if ps =~ '\n\s*\d\+'
-        echohl ErrorMsg
-        echo "Too many running '".a:name."' processes. Don't know which to attach to. Use a PID"
-        echohl None
-        return ''
+    let pslines = split(ps, '\n')
+    if len(pslines) == 1
+        return matchstr(ps, '^\s*\zs\d\+')
     end
-    return matchstr(ps, '^\s*\zs\d\+')
+
+    if len(pslines) > 1
+        if !isdirectory('/proc') || $DISPLAY == ''
+            echohl ErrorMsg
+            echo "Too many running '".a:name."' processes. Don't know which to attach to. Use a PID."
+            echohl None
+            return ''
+        end
+
+
+        let pidsOnThisDisplay = []
+
+        for psline in pslines
+            let pid = matchstr(psline, '^\s*\zs\d\+')
+            let envfile = '/proc/'.pid.'/environ'
+            if filereadable(envfile)
+                let envContents = readfile(envfile, 'b')[0]
+                let displayNum = matchstr(envContents, 'DISPLAY=\zs[^\o0]\+')
+                if displayNum == $DISPLAY
+                    call add(pidsOnThisDisplay, pid)
+                end
+            end
+        endfor
+
+        if len(pidsOnThisDisplay) == 1
+            echohl WarningMsg
+            echomsg "Attaching to PID ".pidsOnThisDisplay[0]." because that is the only PID on this display."
+            echohl None
+
+            return pidsOnThisDisplay[0]
+        else
+            echohl ErrorMsg
+            echo "Too many running '".a:name."' processes on this $DISPLAY. Don't know which to attach to. Use a PID."
+            echohl None
+            return ''
+        end
+    end
 endfunction " }}}
 function! gdb#gdb#Attach(pid)
     let pid = a:pid
