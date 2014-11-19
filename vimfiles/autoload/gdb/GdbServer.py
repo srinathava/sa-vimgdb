@@ -25,7 +25,8 @@ class GdbServer(TerminalServer):
 
     def needsUserInput(self, data):
         return (data.endswith('query\r\n') or
-                data.endswith('commands\r\n'))
+                data.endswith('commands\r\n') or
+                data.endswith('prompt-for-continue\r\n'))
 
     def getUserInput(self, data):
         if data.endswith('query\r\n'):
@@ -35,6 +36,9 @@ class GdbServer(TerminalServer):
 
         if data.endswith('commands\r\n'):
             return 'end'
+
+        if data.endswith('prompt-for-continue\r\n'):
+            return ''
 
         assert False, 'Illegal data input for getUserInput'
 

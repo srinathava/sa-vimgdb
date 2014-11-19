@@ -63,7 +63,7 @@ function! s:GdbInitWork( )
     let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
     setlocal filetype=gdbvim
     exec "nmap <buffer> <silent> <CR>           :call gdb#gdb#GotoSelectedFrame()<CR>"
-    exec "nmap <buffer> <silent> <2-LeftMouse>  :call gdb#gdb#GotoSelectedFrame()<CR>"
+    " exec "nmap <buffer> <silent> <2-LeftMouse>  :call gdb#gdb#GotoSelectedFrame()<CR>"
 
     python import sys
     python import vim
@@ -101,7 +101,6 @@ function! s:GdbInitWork( )
         let gdbFile = matchstr(g:GdbFileToRun, '^\S\+')
         if gdbFile != ''
             call gdb#gdb#RunCommand('file '.gdbFile)
-            call gdb#gdb#RedoAllBreakpoints()
         endif
     endif
 
@@ -424,6 +423,10 @@ function! gdb#gdb#RunCommand(cmd)
     exec 'python gdbClient.runCommand("""'.cmd.'""")'
     call s:SetCurPos(pos)
     let &ballooneval = oldBE
+
+    if a:cmd =~ '^file\s'
+        call gdb#gdb#RedoAllBreakpoints()
+    endif
 endfunction " }}}
 " gdb#gdb#Terminate: terminates the running GDB thread {{{
 function! gdb#gdb#Terminate()
@@ -590,7 +593,9 @@ function! gdb#gdb#ShowStack()
     let b:GdbStackWindow = 1
     " remove original stuff.
     % d _
-    python gdbClient.expandStack(10)
+    " winheight - 1 because we want the last line reserved for 
+    " press <tab> for more lines.
+    exec 'python gdbClient.expandStack('.(winheight('.')-1).')'
     " Remove all empty lines.
     g/^\s*$/d_
 
@@ -823,11 +828,13 @@ function! gdb#gdb#Attach(pid)
     let pid = a:pid
     if pid == ''
         let input = input('Enter the PID or process name to attach to :')
-        if input =~ '^\d\+$'
-            let pid = input
-        else
-            let pid = s:GetPidFromName(input)
-        endif
+    else
+        let input = pid
+    endif
+    if input =~ '^\d\+$'
+        let pid = input
+    else
+        let pid = s:GetPidFromName(input)
     endif
     if pid !~ '^\d\+$'
         return
