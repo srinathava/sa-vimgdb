@@ -145,7 +145,7 @@ class VimGdbClient:
         if self.queryAnswer:
             return self.queryAnswer
 
-        ch = int(vim.eval(r'confirm("%s", "&Yes\n&No")' % query))
+        ch = int(vim.eval(r'confirm("%s", "&Yes\n&No")' % query.replace(r'"', r'\"')))
         self.debug('getting answer for query [%s] = %s' % (query, ch))
         if (ch == 1):
             retval = 'y'
