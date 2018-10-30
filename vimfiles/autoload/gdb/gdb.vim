@@ -10,7 +10,10 @@ if exists('s:doneSourcingFile')
     finish
 endif
 let s:doneSourcingFile = 1
-" User preferences {{{
+
+" ==============================================================================
+" User preferences
+" ============================================================================== 
 " gdb#gdb#Let: safely assign to a variable {{{
 " Description: 
 function! gdb#gdb#Let(varName, value)
@@ -27,9 +30,10 @@ call gdb#gdb#Let('GdbRunOnStart', 1)
 call gdb#gdb#Let('GdbQuitOnProgramFinish', 0)
 call gdb#gdb#Let('GdbLogging', 0)
 call gdb#gdb#Let('GdbCmd', 'gdb')
-" }}}
 
-" Script local variables {{{
+" ==============================================================================
+" Script local variables
+" ============================================================================== 
 let s:userIsBusy = 0
 let s:gdbStarted = 0
 let s:scriptDir = expand('<sfile>:p:h')
@@ -44,11 +48,8 @@ let s:gdbNametoBufNumMap = {}
 
 let s:userMappings = {}
 
-let s:bpsForThisSign = {}
-let s:signIdToBpNumMap = {}
-" }}}
+let s:queryAnswer = ''
 
-" Startup tasks and window management  {{{
 " s:GdbInitWork: does the actual work of initialization {{{
 " Description: 
 function! s:GdbInitWork( )
@@ -66,12 +67,12 @@ function! s:GdbInitWork( )
     exec "nmap <buffer> <silent> <CR>           :call gdb#gdb#GotoSelectedFrame()<CR>"
     " exec "nmap <buffer> <silent> <2-LeftMouse>  :call gdb#gdb#GotoSelectedFrame()<CR>"
 
-    python import sys
-    python import vim
-    exec 'python sys.path += [r"'.s:scriptDir.'"]'
-    python from VimGdbClient import VimGdbClient, initLogging
+    call MW_ExecPython("import sys")
+    call MW_ExecPython("import vim")
+    call MW_ExecPython('sys.path += [r"'.s:scriptDir.'"]')
+    call MW_ExecPython("from VimGdbClient import VimGdbClient, initLogging")
 
-    exec 'py initLogging('.g:GdbLogging.')'
+    call MW_ExecPython('initLogging('.g:GdbLogging.')')
 
     if has('gui_running') && g:GdbShowAsyncOutputWindow
         if v:servername == ''
@@ -84,12 +85,12 @@ function! s:GdbInitWork( )
         silent! exec '!xterm -T GDB -e python '.s:scriptDir.'/VimGdbServer.py '.loggingArg.v:servername.' &'
         silent! sleep 2
     else
-        python from VimGdbServer import startVimServerThread
-        exec 'python portNum = startVimServerThread("'.v:servername.'", "'.g:GdbCmd.'")'
+        call MW_ExecPython("from VimGdbServer import startVimServerThread")
+        call MW_ExecPython('portNum = startVimServerThread("'.v:servername.'", "'.g:GdbCmd.'")')
     endif
 
-    python gdbClient = VimGdbClient(portNum)
-    python gdbClient.flush()
+    call MW_ExecPython("gdbClient = VimGdbClient(portNum)")
+    call MW_ExecPython("gdbClient.flush()")
     
     g/^\s*$/d_
 
@@ -104,7 +105,6 @@ function! s:GdbInitWork( )
             call gdb#gdb#RunCommand('file '.gdbFile)
         endif
     endif
-    call gdb#gdb#RedoAllBreakpoints()
 
     augroup TerminateGdb
         au!
@@ -227,6 +227,11 @@ function! s:RestoreUserMaps()
         au!
     augroup END
 endfunction " }}}
+" s:CreateEofSignForBuffer:  {{{
+" Description: 
+function! s:CreateEofSignForBuffer()
+    <+function body+>
+endfunction " }}}
 " gdb#gdb#CreateEofSign:  {{{
 " Description: 
 function! gdb#gdb#CreateEofSign()
@@ -289,9 +294,10 @@ function! gdb#gdb#ShowCmdWindow()
     let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
     setlocal filetype=gdbvim
 endfunction " }}}
-" }}}
 
-" Updating the _GDB_ window dynamically. {{{
+" ==============================================================================
+" Updating the _GDB_ window dynamically.
+" ============================================================================== 
 " gdb#gdb#IsUserBusy: returns 1 if cursor moved etc. {{{
 " Description: 
 function! gdb#gdb#IsUserBusy()
@@ -312,7 +318,7 @@ function! gdb#gdb#UpdateCmdWin()
     endif
 
     exec gdbWinNr.' wincmd w'
-    python gdbClient.printNewLines()
+    call MW_ExecPython("gdbClient.printNewLines()")
     normal! G
 
     if gdbWinNr != presWinNr
@@ -340,7 +346,7 @@ function! gdb#gdb#OnResume()
     " We want to make sure that the command window shows the latest stuff
     " when we are given control. Too bad if the user is busy typing
     " something while this is going on.
-    python gdbClient.flush()
+    call MW_ExecPython("gdbClient.flush()")
     call gdb#gdb#UpdateCmdWin()
     call gdb#gdb#GotoCurFrame()
 
@@ -359,6 +365,10 @@ endfunction " }}}
 " gdb#gdb#GetQueryAnswer:  {{{
 " Description: 
 function! gdb#gdb#GetQueryAnswer(query)
+    if s:queryAnswer != ''
+        return s:queryAnswer
+    endif
+
     call foreground()
     let ans = confirm(a:query, "&Yes\n&No")
     if ans == 1
@@ -367,9 +377,20 @@ function! gdb#gdb#GetQueryAnswer(query)
         return 'n'
     endif
 endfunction " }}}
-" }}}
+" gdb#gdb#SetQueryAnswer: sets an answer for future queries {{{
+" Description: 
+function! gdb#gdb#SetQueryAnswer(ans)
+    let s:queryAnswer = a:ans
+    if a:ans != ''
+        call MW_ExecPython('gdbClient.queryAnswer = "'.a:ans.'"')
+    else
+        call MW_ExecPython('gdbClient.queryAnswer = None')
+    endif
+endfunction " }}}
 
-" Miscellaneous GDB commands {{{
+" ==============================================================================
+" Miscellaneous GDB commands
+" ============================================================================== 
 " s:GdbGetCommandOutputSilent: gets the output of the command {{{
 " Description: 
 function! s:GdbGetCommandOutputSilent(cmd)
@@ -377,9 +398,9 @@ function! s:GdbGetCommandOutputSilent(cmd)
         return ''
     endif
 
-    python gdbClient.updateWindow = False
-    exec 'python gdbClient.getCommandOutput("""'.a:cmd.' """, "retval")'
-    python gdbClient.updateWindow = True
+    call MW_ExecPython("gdbClient.updateWindow = False")
+    let retval = MW_EvalPython('gdbClient.getCommandOutput("""'.a:cmd.'""")')
+    call MW_ExecPython("gdbClient.updateWindow = True")
     return retval
 endfunction " }}}
 " s:GdbGetCommandOutput: gets the output of the command {{{
@@ -390,7 +411,7 @@ function! s:GdbGetCommandOutput(cmd)
     endif
 
     let pos = s:GetCurPos()
-    exec 'python gdbClient.getCommandOutput("""'.a:cmd.' """, "retval")'
+    let retval = MW_EvalPython('gdbClient.getCommandOutput("""'.a:cmd.'""")')
     call s:SetCurPos(pos)
 
     return retval
@@ -415,7 +436,7 @@ function! gdb#gdb#RunCommand(cmd)
     " have multiple on going connections to it.
     let oldBE = &ballooneval
     set noballooneval
-    exec 'python gdbClient.runCommand("""'.cmd.'""")'
+    call MW_ExecPython('gdbClient.runCommand("""'.cmd.'""")')
     call s:SetCurPos(pos)
     let &ballooneval = oldBE
 
@@ -428,7 +449,7 @@ function! gdb#gdb#Terminate()
     if s:gdbStarted == 1
         sign unplace 1
         set balloonexpr=
-        python gdbClient.terminate()
+        call MW_ExecPython("gdbClient.terminate()")
         call s:RestoreUserMaps()
         call s:CloseAllGdbWindows()
         let s:gdbStarted = 0
@@ -451,8 +472,7 @@ endfunction " }}}
 " gdb#gdb#IsBusy: tells if inferior program is running {{{
 " Description: 
 function! gdb#gdb#IsBusy()
-    py vim.command('let retval = %s' % gdbClient.isBusy())
-    return retval
+    return MW_EvalPython('gdbClient.isBusy()')
 endfunction " }}}
 " s:GdbWarnIfNotStarted: warns if GDB has not been started {{{
 " Description:  
@@ -485,29 +505,16 @@ endfunction " }}}
 function! gdb#gdb#RunOrResume(arg)
     if a:arg =~ '^start$'
         call gdb#gdb#Init()
-    elseif a:arg =~ '^\(r\%[un]\)'
-        " Sync all breakpoints from the file. This is especially important
-        " if the user is recompiling the file and rerunning in an existing
-        " GDB session. Otherwise, where GDB has its breakpoints and where
-        " vim is displaying the breakpoint can go wildly out of sync.
-        call gdb#gdb#RedoAllBreakpoints()
-        call gdb#gdb#ResumeProgram(a:arg)
+    elseif a:arg =~ '^\(comm\%[ands]\|p\%[rint]\|disp\%[lay]\|en\%[able]\|dis\%[able]\|file\|pps\|d\%[elete]\|attach\)\>'
+        call gdb#gdb#RunCommand(a:arg)
     else
         call gdb#gdb#ResumeProgram(a:arg)
     endif
 endfunction " }}}
-" gdb#gdb#SetQueryAnswer: sets an answer for future queries {{{
-" Description: 
-function! gdb#gdb#SetQueryAnswer(ans)
-    if a:ans != ''
-        exec 'py gdbClient.queryAnswer = "'.a:ans.'"'
-    else
-        exec 'py gdbClient.queryAnswer = None'
-    endif
-endfunction " }}}
-" }}}
 
-" Stack manipulation and information {{{
+" ==============================================================================
+" Stack manipulation and information
+" ============================================================================== 
 " gdb#gdb#GotoCurFrame: places cursor at current frame {{{
 " Description: 
 function! gdb#gdb#GotoCurFrame()
@@ -516,7 +523,7 @@ function! gdb#gdb#GotoCurFrame()
     endif
 
     sign unplace 1
-    python gdbClient.gotoCurrentFrame()
+    call MW_ExecPython("gdbClient.gotoCurrentFrame()")
     redraw
 endfunction " }}}
 " gdb#gdb#FrameUp: goes up the stack (i.e., to caller function) {{{
@@ -577,7 +584,7 @@ endfunction " }}}
 " gdb#gdb#ExpandStack:  {{{
 " Description: 
 function! gdb#gdb#ExpandStack(numFrames)
-    exec 'python gdbClient.expandStack('.a:numFrames.')'
+    call MW_ExecPython('gdbClient.expandStack('.a:numFrames.')')
     setlocal nomod
 endfunction " }}}
 " gdb#gdb#ShowStack: shows current GDB stack {{{
@@ -594,7 +601,7 @@ function! gdb#gdb#ShowStack()
     % d _
     " winheight - 1 because we want the last line reserved for 
     " press <tab> for more lines.
-    exec 'python gdbClient.expandStack('.(winheight('.')-1).')'
+    call MW_ExecPython('gdbClient.expandStack('.(winheight('.')-1).')')
     " Remove all empty lines.
     g/^\s*$/d_
 
@@ -626,9 +633,10 @@ function! gdb#gdb#RefreshStackPtr(stackNum)
         exec 'silent! % s/^ \(\s*#'.a:stackNum.'\)\>/>\1/e'
     endif 
 endfunction " }}}
-" }}}
 
-" Break-point stuff. {{{
+" ==============================================================================
+" Break-point stuff.
+" ============================================================================== 
 " gdb#gdb#SetBreakPoint: {{{
 
 let s:numBreakPoints = 0
@@ -637,16 +645,15 @@ exec 'sign define gdbBreakPoint text=!! icon='.s:scriptDir.'/bp.png texthl=Error
 function! gdb#gdb#SetBreakPoint()
     call s:SetBreakPointAt(expand('%:p'), line('.'), gdb#gdb#GetAllBreakPoints())
 
-    " let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
+    let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
 endfunction " }}}
 " s:SetBreakPointAt: sets breakpoint at (file, line) {{{
 " Description: 
-function! s:SetBreakPointAt(fname, lnum, prevbps)
+function! s:SetBreakPointAt(fname, lnum, prevBps)
     " To fix very strange problem with setting breakpoints in files on
     " network drives.
     let fnameTail = fnamemodify(a:fname, ':t')
     
-    let gdbBpNum = -1
     if s:gdbStarted
         if s:GdbWarnIfBusy()
             return
@@ -655,69 +662,33 @@ function! s:SetBreakPointAt(fname, lnum, prevbps)
         let output = s:GdbGetCommandOutput('break '.fnameTail.':'.a:lnum)
         if output !~ 'Breakpoint \d\+'
             return
-        else
-            let gdbBpNum = matchstr(output, 'Breakpoint \zs\d\+\ze')
         endif
     end
 
-    let signId = s:GetSignIdForFileLine(a:fname, a:lnum, a:prevbps)
-
-    " Do not place multiple signs in exactly the same location. That can
-    " get really weird at breakpoint deletion time.
-    if signId == 0
+    let lnum = line('.')
+    let spec = 'line='.a:lnum.' file='.a:fname
+    let idx = index(a:prevBps, spec)
+    if idx < 0
         let signId = (1024+s:numBreakPoints)
 
-        let spec = 'line='.a:lnum.' file='.a:fname
+        " FIXME: Should do this only if a sign is already not placed at
+        " this location.
         exec 'sign place '.signId.' name=gdbBreakPoint '.spec
         let s:numBreakPoints += 1
     endif
-
-    " Remember what GDB breakpoint corresponds to this sign Id.
-    if gdbBpNum > 0
-        let bpsForThisSign = get(s:signIdToBpNumMap, signId, [])
-        let bpsForThisSign += [gdbBpNum]
-        let s:signIdToBpNumMap[signId] = bpsForThisSign
-    endif
-
-endfunction " }}}
-" s:GetSignIdForFileLine: {{{
-" Description: 
-function! s:GetSignIdForFileLine(file, line, ...)
-    if a:0 > 0
-        let prevbps = a:1
-    else
-        let prevbps = gdb#gdb#GetAllBreakPoints()
-    endif
-
-    for bp in prevbps
-        if bp.file == a:file && bp.line == a:line
-            return bp.id
-        endif
-    endfor
-    return 0
 endfunction " }}}
 " gdb#gdb#ClearBreakPoint: clears break point {{{
 " Description:  
 function! gdb#gdb#ClearBreakPoint()
-    " Find out all the GDB breakpoints associated with this sign and
-    " delete it.
-    let signId = s:GetSignIdForFileLine(expand('%:p'), line('.'))
-    echomsg "removing sign ".signId
-
     if s:gdbStarted == 1
         if s:GdbWarnIfBusy()
             return
         endif
-
-        if signId > 0
-            let breakpoints = s:signIdToBpNumMap[signId]
-
-            for bp in breakpoints
-                call gdb#gdb#RunCommand('del '.bp)
-            endfor
-
-        endif
+        " ask GDB to clear breakpoints here.
+        call gdb#gdb#RunCommand('clear '.expand('%:p:t').':'.line('.'))
     endif
+
+    let spec = 'line='.line('.').' file='.expand('%:p')
 
     while 1
         let again = 0
@@ -732,9 +703,7 @@ function! gdb#gdb#ClearBreakPoint()
         endtry
     endwhile
 
-    let s:signIdToBpNumMap[signId] = []
-
-    " let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
+    let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
 endfunction " }}}
 " gdb#gdb#GetAllBreakPoints: gets all breakpoints set by us {{{
 " Description: 
@@ -749,13 +718,8 @@ function! gdb#gdb#GetAllBreakPoints()
             let fname = fnamemodify(fname, ':p')
         endif
         if line =~ 'name=gdbBreakPoint'
-            let match = matchlist(line, 'line=\(\d\+\)\s\+id=\(\d\+\)')
-
-            let bpinfo = {}
-            let bpinfo.line = match[1]
-            let bpinfo.file = fname
-            let bpinfo.id = match[2]
-            let bps += [bpinfo]
+            let lnum = matchstr(line, 'line=\zs\d\+\ze')
+            let bps += ['line='.lnum.' file='.fname]
         endif
     endfor
 
@@ -765,10 +729,12 @@ endfunction " }}}
 " Description: 
 function! gdb#gdb#RedoAllBreakpoints()
     call gdb#gdb#SetQueryAnswer('y')
-    call gdb#gdb#RunCommand('delete')
     let breakPoints = gdb#gdb#GetAllBreakPoints()
     for bp in breakPoints
-        call s:SetBreakPointAt(bp.file, bp.line, breakPoints)
+        let items = matchlist(bp, 'line=\(\d\+\) file=\(.*\)')
+        let line = items[1]
+        let fname = items[2]
+        call s:SetBreakPointAt(fname, line, breakPoints)
     endfor
     call gdb#gdb#SetQueryAnswer('')
 endfunction " }}}
@@ -805,15 +771,16 @@ function! gdb#gdb#RestoreSessionBreakPoints()
         endfor
     endif
 endfunction " }}}
-" }}}  
 
-" Program execution, stepping, continuing etc. {{{
+" ==============================================================================
+" Program execution, stepping, continuing etc.
+" ============================================================================== 
 " gdb#gdb#Attach: attach to a running program {{{
 " Description: 
 " s:GetPidFromName: gets the PID from the name of a program {{{
 " Description: 
 function! s:GetPidFromName(name)
-    let ps = system('ps -u '.$USER.' | grep '.a:name.' | grep -v "<defunct>"')
+    let ps = system('ps -u '.$USER.' | grep -w '.a:name.' | grep -v "<defunct>"')
     if ps == ''
         echohl ErrorMsg
         echo "No running '".a:name."' process found"
@@ -882,6 +849,7 @@ function! gdb#gdb#Attach(pid)
         call s:GdbInitWork()
     endif
     call gdb#gdb#RunCommand('attach '.pid)
+    call gdb#gdb#RedoAllBreakpoints()
 endfunction " }}}
 " gdb#gdb#ResumeProgram: gives control back to the inferior program {{{
 " Description: This should be used for GDB commands which could potentially
@@ -893,7 +861,7 @@ function! gdb#gdb#ResumeProgram(cmd)
     sign unplace 1
     set balloonexpr=
 
-    exec 'python gdbClient.resumeProgram("""'.a:cmd.'""")'
+    call MW_ExecPython('gdbClient.resumeProgram("""'.a:cmd.'""")')
 endfunction " }}}
 " gdb#gdb#Run: runs the inferior program {{{
 function! gdb#gdb#Run()
@@ -955,7 +923,7 @@ function! gdb#gdb#Interrupt( )
     if s:GdbWarnIfNotStarted()
         return
     endif
-    python gdbClient.interrupt()
+    call MW_ExecPython("gdbClient.interrupt()")
     call gdb#gdb#OnResume()
 endfunction " }}}
 " gdb#gdb#Kill: kills the inferior {{{
@@ -964,7 +932,7 @@ function! gdb#gdb#Kill()
         return
     endif
     if gdb#gdb#IsBusy()
-        python gdbClient.interrupt()
+        call MW_ExecPython("gdbClient.interrupt()")
     endif
     call gdb#gdb#RunCommand('kill')
     let progInfo = s:GdbGetCommandOutputSilent('info program')
@@ -974,9 +942,10 @@ function! gdb#gdb#Kill()
         call gdb#gdb#OnResume()
     endif
 endfunction " }}}
-" }}}
 
-" Balloon expression {{{
+" ==============================================================================
+" Balloon expression
+" ============================================================================== 
 " gdb#gdb#BalloonExpr: balloonexpr for GDB {{{
 function! gdb#gdb#BalloonExpr()
     if gdb#gdb#IsBusy()
@@ -1023,9 +992,10 @@ function! s:GetContingString(bufnr, lnum, col)
     let matchtxt = pretxt.posttxt
     return matchtxt
 endfunction " }}}
-" }}}
 
-" Variable watching and expansion {{{
+" ==============================================================================
+" Variable watching and expansion
+" ============================================================================== 
 " gdb#gdb#OpenGdbVarsWindow:  {{{
 " Description: 
 let s:GdbVarWinBufNum = -1
@@ -1061,17 +1031,17 @@ function! gdb#gdb#AddGdbVar(inExpr)
 
     call gdb#gdb#OpenGdbVarsWindow()
 
-    exec 'python gdbClient.addGdbVar("'.expr.'")'
+    call MW_ExecPython('gdbClient.addGdbVar("'.expr.'")')
 endfunction " }}}
 " gdb#gdb#ExpandGdbVar:  {{{
 " Description: 
 function! gdb#gdb#ExpandGdbVar()
-    python gdbClient.expandGdbVar()
+    call MW_ExecPython("gdbClient.expandGdbVar()")
 endfunction " }}}
 " gdb#gdb#CollapseGdbVar:  {{{
 " Description: 
 function! gdb#gdb#CollapseGdbVar()
-    python gdbClient.collapseGdbVar()
+    call MW_ExecPython("gdbClient.collapseGdbVar()")
 
     " Now remove all lines beneath this one with greater indentation that
     " this one. This basically collapses the tree beneath this one.
@@ -1107,7 +1077,7 @@ function! gdb#gdb#RefreshGdbVars()
         call gdb#gdb#OpenGdbVarsWindow()
         " remove all previous notifications.
         %s/^[^#]/ /
-        python gdbClient.refreshGdbVars()
+        call MW_ExecPython("gdbClient.refreshGdbVars()")
     endif
 endfunction " }}}
 " gdb#gdb#DeleteGdbVar:  {{{
@@ -1125,13 +1095,14 @@ function! gdb#gdb#DeleteGdbVar(wholeTree)
     " First delete everything below.
     call gdb#gdb#CollapseGdbVar()
     " then delete itself.
-    python gdbClient.deleteGdbVar()
+    call MW_ExecPython("gdbClient.deleteGdbVar()")
     " then delete the current line.
     . d _
 endfunction " }}}
-" }}}
 
-" utils {{{
+" ==============================================================================
+" utils
+" ============================================================================== 
 " gdb#gdb#GetLocal: returns a local variable {{{
 " Description:  
 function! gdb#gdb#GetLocal(varname)
@@ -1203,6 +1174,5 @@ endfunction " }}}
 function! gdb#gdb#GetVar(varName)
     return s:{a:varName}
 endfunction " }}}
-" }}}
 
 " vim: fdm=marker

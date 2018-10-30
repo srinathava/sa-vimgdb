@@ -6,7 +6,7 @@ import re
 
 class GdbServer(TerminalServer):
     def __init__(self, cmd='gdb'):
-        TerminalServer.__init__(self, cmd + ' --annotate=3')
+        TerminalServer.__init__(self, cmd)
         self.queryAnswer = ''
         self.queryPat = re.compile(r'pre-query\r\n(?P<query>.*)\r\nquery', re.DOTALL)
 

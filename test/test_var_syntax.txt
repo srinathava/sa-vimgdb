@@ -1,9 +1,0 @@
-# Press <tab> to expand/collapse the hierarchy
- - g  {var2}
- - f  {var1}
-   - public <> {var1.public}
-c    + foo1 <0x400f38 "hello world"> {var1.public.foo1}
-     + foo2 <{...}> {var1.public.foo2}
-     + foo3 <{...}> {var1.public.foo3}
-c      foo4 <8> {var1.public.foo4}
-

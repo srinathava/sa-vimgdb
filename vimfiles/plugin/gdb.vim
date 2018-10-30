@@ -2,19 +2,19 @@ if has('gui_running')
     amenu &Gdb.Start\ Gdb               :call gdb#gdb#Init()<CR>
     amenu &Gdb.Show\ Command\ Window    :call gdb#gdb#ShowCmdWindow()<CR>
 
-    amenu &Gdb.&Step        :call gdb#gdb#Step()<CR>
-    amenu &Gdb.&Next        :call gdb#gdb#Next()<CR>
-    amenu &Gdb.&Finish      :call gdb#gdb#Finish()<CR>
-    amenu &Gdb.&Until       :call gdb#gdb#Until()<CR>
-    amenu &Gdb.&Run         :call gdb#gdb#Run()<CR>
-    amenu &Gdb.&Continue    :call gdb#gdb#Continue()<CR>
-    amenu &Gdb.&Interrupt   :call gdb#gdb#Interrupt()<CR>
-    amenu &Gdb.&Kill        :call gdb#gdb#Kill()<CR>
+    amenu &Gdb.&Step\ Into<Tab><F11>        :call gdb#gdb#Step()<CR>
+    amenu &Gdb.&Next<Tab><F10>              :call gdb#gdb#Next()<CR>
+    amenu &Gdb.Step\ &Out<Tab>Shift-<F11>   :call gdb#gdb#Finish()<CR>
+    amenu &Gdb.&Until                       :call gdb#gdb#Until()<CR>
+    amenu &Gdb.&Run                         :call gdb#gdb#Run()<CR>
+    amenu &Gdb.&Continue<Tab><F5>           :call gdb#gdb#Continue()<CR>
+    amenu &Gdb.&Interrupt<Tab>Ctrl-C        :call gdb#gdb#Interrupt()<CR>
+    amenu &Gdb.&Kill<Tab>Shift+<F5>         :call gdb#gdb#Kill()<CR>
 
     amenu &Gdb.-sep00-      <Nop>
 
-    amenu &Gdb.&Up\ Stack               :call gdb#gdb#FrameUp()<CR>
-    amenu &Gdb.&Down\ Stack             :call gdb#gdb#FrameDown()<CR>
+    amenu &Gdb.&Up\ Stack\ (caller)<Tab>U               :call gdb#gdb#FrameUp()<CR>
+    amenu &Gdb.&Down\ Stack\ (callee)<Tab>D             :call gdb#gdb#FrameDown()<CR>
     amenu &Gdb.&Goto\ Frame             :call gdb#gdb#FrameN(-1)<CR>
     amenu &Gdb.Sho&w\ Stack             :call gdb#gdb#ShowStack()<CR>
     amenu &Gdb.Expand\ Full\ Stack      :call gdb#gdb#ExpandStack(9999)<CR>
@@ -22,14 +22,14 @@ if has('gui_running')
 
     amenu &Gdb.-sep01-      <Nop>
 
-    amenu &Gdb.&Toggle\ Breakpoint      :call gdb#gdb#ToggleBreakPoint()<CR>
+    amenu &Gdb.&Toggle\ Breakpoint<Tab><F9>      :call gdb#gdb#ToggleBreakPoint()<CR>
 
     amenu &Gdb.-sep1- <Nop>
 
     " print value at cursor
-    nmenu &Gdb.&Print\ Value :call gdb#gdb#RunCommand("print " . expand("<cword>"))<CR>
-    vmenu &Gdb.&Print\ Value y:call gdb#gdb#RunCommand("print <C-R>"")<CR>
-    amenu &Gdb.Run\ Command  :call gdb#gdb#RunCommand('')<CR>
+    nmenu &Gdb.&Print\ Value<Tab>Ctrl-P         :call gdb#gdb#RunCommand("print " . expand("<cword>"))<CR>
+    vmenu &Gdb.&Print\ Value                    y:call gdb#gdb#RunCommand("print <C-R>"")<CR>
+    amenu &Gdb.Run\ Command                     :call gdb#gdb#RunCommand('')<CR>
 
     amenu &Gdb.-sep2- <Nop>
 
@@ -48,6 +48,8 @@ if has('gui_running')
     amenu 80.6 PopUp.Examine\ Data\ (GDB)   :call gdb#gdb#AddGdbVar('')<CR>
     amenu 80.7 PopUp.-sep-gdb0- <Nop>
 endif
+
+nmap <F9>      :call gdb#gdb#ToggleBreakPoint()<CR>
 
 com! -nargs=1 GDB :call gdb#gdb#RunOrResume(<q-args>)
 com! -nargs=? GDBEX :call gdb#gdb#AddGdbVar(<q-args>)

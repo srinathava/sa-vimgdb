@@ -1,16 +1,16 @@
 # Echo client program
 import socket
 import sys
-from sockutils import *
+from sockutils import sendData
 
-def get_reply(input):
+
+def get_reply(inStr):
     HOST = '127.0.0.1'                 # The remote host
     PORT = 50007              # The same port as used by the server
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((HOST, PORT))
 
-    
-    sendData(s, input)
+    sendData(s, inStr)
     while 1:
         data = s.recv(1024)
         if not data:
@@ -18,17 +18,19 @@ def get_reply(input):
 
         sys.stdout.write(data)
 
-    print 'shutting down/closing socket...'
+    print('shutting down/closing socket...')
     s.shutdown(2)
     s.close()
     del s
 
+
 def get_raw_non_trivial_input():
     q = ''
     while not q:
-        q = raw_input('>> ')
+        q = input('>> ')
 
     return q
+
 
 if __name__ == "__main__":
     while 1:

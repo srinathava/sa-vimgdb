@@ -2,12 +2,18 @@ from GdbServer import GdbServer
 import os
 import sys
 from threading import Thread
-import commands
 from subprocess import Popen, PIPE
+
 try:
     import vim
-except:
+except:  # noqa: E722
     pass
+
+try:
+    from subprocess import getoutput
+except ImportError:
+    from commands import getoutput
+
 
 class VimGdbServer(GdbServer):
     def __init__(self, vimServerName, gdbcmd):
@@ -18,10 +24,11 @@ class VimGdbServer(GdbServer):
         self.debug('sending GetQueryAnswer for [%s] command to VIM' % query)
 
         if self.vimServerName:
-            ans = Popen(['vim', '--servername', self.vimServerName, 
-                         '--remote-expr', 
-                         'gdb#gdb#GetQueryAnswer("%s")' % query], 
+            ans = Popen(['vim', '--servername', self.vimServerName,
+                         '--remote-expr',
+                         'gdb#gdb#GetQueryAnswer("%s")' % query],
                         stdout=PIPE).communicate()[0]
+            ans = ans.decode()
         else:
             ans = vim.eval('gdb#gdb#GetQueryAnswer("%s")' % query)
 
@@ -33,11 +40,12 @@ class VimGdbServer(GdbServer):
 
         if self.vimServerName:
             cmd = "vim --servername %s --remote-expr 'gdb#gdb#OnResume()'" % self.vimServerName
-            commands.getoutput(cmd)
+            getoutput(cmd)
         else:
             vim.eval('gdb#gdb#OnResume()')
 
         self.debug('done receiving reply from VIM about onResume')
+
 
 class VimServerThread(Thread):
     def __init__(self, vimServerName, gdbcmd):
@@ -47,12 +55,12 @@ class VimServerThread(Thread):
     def run(self):
         self.server.run()
 
+
 def startVimServerThread(serverName, gdbcmd):
-    import time
     s = VimServerThread(serverName, gdbcmd)
     s.start()
-    # return the port number
     return s.server.socket.getsockname()[1]
+
 
 if __name__ == '__main__':
     from optparse import OptionParser

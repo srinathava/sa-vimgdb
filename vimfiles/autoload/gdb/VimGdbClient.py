@@ -1,29 +1,25 @@
 import socket
-import sys
 import vim
 import re
 import errno
-from sockutils import *
+from sockutils import sendData
 from GdbMiParser import parseGdbMi
-import cStringIO
 import time
 import os
-
 import logging
 
+
 def initLogging(logVerbose):
-    try:
-        logger = logging.getLogger('VimGdb')
-        handler = logging.FileHandler('/tmp/VimGdb.%s.log' % os.getenv('USER'), mode='w')
-        formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        if logVerbose:
-            logger.setLevel(logging.DEBUG)
-        else:
-            logger.setLevel(logging.ERROR)
-    except:
-        pass
+    logger = logging.getLogger('VimGdb')
+    handler = logging.FileHandler('/tmp/VimGdb.%s.log' % os.getenv('USER'), mode='w')
+    formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    if logVerbose:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.ERROR)
+
 
 class VimGdbClient:
     def __init__(self, portNum):
@@ -51,10 +47,10 @@ class VimGdbClient:
     def getReply(self, input):
         try:
             return self.getReply_try(input)
-        except:
+        except:  # noqa: E722
             self.exception('Exception in getting reply!')
             # raise
-    
+
     def tryConnect(self):
         HOST = '127.0.0.1'        # The remote host
         PORT = self.portNum       # The same port as used by the server
@@ -65,12 +61,12 @@ class VimGdbClient:
             try:
                 self.socket.connect((HOST, PORT))
                 return
-            except socket.error, (en, msg):
+            except socket.error as error:
+                (en, msg) = error.args
                 self.debug('Getting connection error %s (%s)' % (en, msg))
 
             time.sleep(0.1)
             numAttempts += 1
-
 
     def getReply_try(self, input):
         self.tryConnect()
@@ -99,7 +95,8 @@ class VimGdbClient:
                         continue
                 else:
                     nEmptyPackets = 0
-            except socket.error,(en, msg):
+            except socket.error as error:
+                (en, msg) = error.args
                 if en == errno.EINTR:
                     continue
                 else:
@@ -109,7 +106,7 @@ class VimGdbClient:
                     self.exception('Socket error reading from the server... breaking out of read loop')
                     break
 
-            self.onNewData(data)
+            self.onNewData(data.decode())
 
         self.debug('Done getting reply from server... Closing socket')
         self.socket.shutdown(2)
@@ -136,10 +133,10 @@ class VimGdbClient:
         self.getReply('INT')
         return self.newDataTotal
 
-    def getCommandOutput(self, cmd, var):
+    def getCommandOutput(self, cmd):
         output = self.runCommand(cmd)
         output = re.sub('"', '\\"', output)
-        vim.command('let %s = "%s"' % (var, output))
+        return output
 
     def getQueryAnswer(self, query):
         if self.queryAnswer:
@@ -209,7 +206,7 @@ class VimGdbClient:
 
         if self.newLines:
             vim.command('call gdb#gdb#UpdateCmdWin()')
-            
+
     def printNewLines(self):
         if self.newLines:
             vim.current.buffer.append(self.newLines)
@@ -230,7 +227,14 @@ class VimGdbClient:
         return ''
 
     def getParsedGdbMiOutput(self, cmd):
-        return parseGdbMi(self.getSilentMiOutput(cmd))
+        cmdOutput = self.getSilentMiOutput(cmd)
+        try:
+            obj = parseGdbMi(cmdOutput)
+            return obj
+        except:  # noqa: E722 (we are re-raising with additional info)
+            self.exception('Exception parsing GDB command output')
+            self.log(cmdOutput.__repr__())
+            raise
 
     def isBusy(self):
         if self.socket:
@@ -312,7 +316,7 @@ class VimGdbClient:
             vim.current.line = curLine
 
             varname = m.group(2)
-            obj = self.getParsedGdbMiOutput('-var-delete -c %s' % varname)
+            self.getParsedGdbMiOutput('-var-delete -c %s' % varname)
 
     def deleteGdbVar(self):
         m = re.search(r'{(\S+)}$', vim.current.line)
@@ -326,7 +330,7 @@ class VimGdbClient:
 
         obj = self.getParsedGdbMiOutput('-var-update 1 *')
         # ^done,changelist=[{name="var1.public.foo1",value="0x401018 \"hello world\"",in_scope="true",type_changed="false"},{name="var1.public.foo4",value="8",in_scope="true",type_changed="false"}]
-        
+
         changelist = obj.changelist
         for change in changelist:
             varname = change.name
@@ -347,14 +351,11 @@ class VimGdbClient:
     # Stack stuff
     # ======================================================
     def gotoCurrentFrame(self):
-        try:
-            out = self.getParsedGdbMiOutput('-stack-info-frame')
-            file = out.frame.fullname
-            line = out.frame.line
-            level = out.frame.level
-            # ^done,frame={level="0",addr="0x00002aaab80758c5",func="cdr_transform_driver_pre_core",file="cdr/cdr_transform_driver.cpp",fullname="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/toolbox/stateflow/src/stateflow/cdr/cdr_transform_driver.cpp",line="263"}
-        except:
-            return
+        out = self.getParsedGdbMiOutput('-stack-info-frame')
+        file = out.frame.fullname
+        line = out.frame.line
+        level = out.frame.level
+        # ^done,frame={level="0",addr="0x00002aaab80758c5",func="cdr_transform_driver_pre_core",file="cdr/cdr_transform_driver.cpp",fullname="/mathworks/devel/sandbox/savadhan/Acgirb/matlab/toolbox/stateflow/src/stateflow/cdr/cdr_transform_driver.cpp",line="263"}
 
         vim.eval('gdb#gdb#RefreshStackPtr(%d)' % level)
         vim.eval('gdb#gdb#PlaceSign("%s", %d)' % (file, line))
@@ -371,7 +372,7 @@ class VimGdbClient:
             else:
                 return
 
-        obj = self.getParsedGdbMiOutput('-stack-list-frames %d %d' % (nextFrameToShow, nextFrameToShow+num-1))
+        obj = self.getParsedGdbMiOutput('-stack-list-frames %d %d' % (nextFrameToShow, nextFrameToShow + num - 1))
         # ^done,stack=[frame={level="0",addr="0x0000000000400a1c",func="foo",file="vartest.cpp",fullname="/mathworks/home/savadhan/code/gdbmiserver/test/vartest.cpp",line="26"},frame={level="1",addr="0x0000000000400d01",func="main",file="vartest.cpp",fullname="/mathworks/home/savadhan/code/gdbmiserver/test/vartest.cpp",line="52"}]
 
         lastIsKnown = isEmpty or (not re.match(r'...skipping', vim.current.buffer[-2]))
@@ -408,4 +409,3 @@ class VimGdbClient:
             vim.current.buffer.append(lines)
         if len(obj.stack) == num:
             vim.current.buffer.append('" Press <tab> for more frames... (next frame to show = %d)' % (nextFrameToShow + num))
-

@@ -1,11 +1,10 @@
 from threading import Thread, Timer
 import socket
-import os, sys
 import re
-from sockutils import *
-import mypexpect
-
+from sockutils import sendData
+import pexpect
 import logging
+
 
 class ReaderThread(Thread):
     def __init__(self, server, cmd):
@@ -16,7 +15,7 @@ class ReaderThread(Thread):
     def run(self):
         try:
             self.run_try()
-        except:
+        except:  # noqa: 722 (want to put an additional debug statement before re-raising
             self.server.exception('Exception in reader thread')
             raise
 
@@ -24,6 +23,7 @@ class ReaderThread(Thread):
         self.server.resumeOnReaderDone = True
         self.server.getReply(self.cmd)
         self.server.onReaderAboutToBeDone()
+
 
 class TerminalServer:
     def __init__(self, cmd='gdb'):
@@ -55,7 +55,7 @@ class TerminalServer:
         self.socket.bind(('127.0.0.1', 0))
 
         # Start GDB shell.
-        self.shell = mypexpect.spawn(self.cmd)
+        self.shell = pexpect.spawn(self.cmd)
 
         # read initial declaration from GDB.
         self.readToPrompt()
@@ -69,7 +69,7 @@ class TerminalServer:
     def closeConnection(self, reason):
         self.debug('closing connection, reason = "%s", conn = %s' % (reason, self.conn))
         if self.conn:
-            sendData(self.conn, reason+'\n')
+            sendData(self.conn, reason + '\n')
             sendData(self.conn, '--GDB--EXIT--\n')
 
             # print 'Server shutting down connection'
@@ -81,7 +81,7 @@ class TerminalServer:
     def run(self):
         try:
             self.run_try()
-        except:
+        except:  # noqa: 722 (want to put an additional debug statement before re-raising
             self.exception('Exception in main server loop!')
             raise
 
@@ -91,13 +91,14 @@ class TerminalServer:
             try:
                 self.socket.listen(1)
                 self.conn, addr = self.socket.accept()
-            except:
+            except:  # noqa: E722
                 self.exception('Socket listening threw an exception!')
                 continue
 
             try:
                 data = self.conn.recv(1024)
-            except:
+                data = data.decode()
+            except:  # noqa: E722
                 self.exception('Socket accept threw an exception')
                 break
 
@@ -130,7 +131,7 @@ class TerminalServer:
                 self.closeConnection('')
                 continue
 
-            isBusy = self.reader and self.reader.isAlive() 
+            isBusy = self.reader and self.reader.isAlive()
             if mode == 'INT':
                 if isBusy:
                     # Need to close the connection first so that the client
@@ -176,7 +177,7 @@ class TerminalServer:
         # do, it results in multiple simultaneous connections being made to
         # the GDB server, one by the onResume() and then by the client code
         # which comes after the interrupt. The second connection will just
-        # hang till the first one is processed and done. 
+        # hang till the first one is processed and done.
         self.resumeOnReaderDone = False
         self.shell.sendintr()
         # Wait for the async read thread to finish.
@@ -184,7 +185,7 @@ class TerminalServer:
             self.reader.join()
             self.reader = None
 
-    def flush(self): 
+    def flush(self):
         sendData(self.conn, self.newDataForClient)
         self.newDataForClient = ''
 
@@ -200,6 +201,7 @@ class TerminalServer:
                 # If connection is alive, we assume that the client is
                 # going to give us the answer.
                 reply = self.conn.recv(1024)
+                reply = reply.decode()
             else:
                 reply = self.getUserInput(self.newDataTotal)
             self.write(reply.strip() + '\n')
@@ -239,10 +241,11 @@ class TerminalServer:
         while not self.stopReading:
             try:
                 data = self.shell.read_nonblocking(size=4096, timeout=0.2)
+                data = data.decode()
                 self.newDataTotal += data
-            except mypexpect.TIMEOUT:
+            except pexpect.TIMEOUT:
                 continue
-            except mypexpect.EOF:
+            except pexpect.EOF:
                 return self.newDataTotal
 
             self.onNewData(data)
@@ -278,5 +281,3 @@ class TerminalServer:
 
     def onResume(self):
         pass
-
-

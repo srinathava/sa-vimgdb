@@ -1,2 +1,0 @@
-#!/usr/bin/env bash
-git archive HEAD | gzip > ~/code-backups/gdbmiserver-`date +%Y-%m-%d`.tgz
