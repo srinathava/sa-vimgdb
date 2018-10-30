@@ -10,10 +10,7 @@ if exists('s:doneSourcingFile')
     finish
 endif
 let s:doneSourcingFile = 1
-
-" ==============================================================================
-" User preferences
-" ============================================================================== 
+" User preferences {{{
 " gdb#gdb#Let: safely assign to a variable {{{
 " Description: 
 function! gdb#gdb#Let(varName, value)
@@ -30,10 +27,9 @@ call gdb#gdb#Let('GdbRunOnStart', 1)
 call gdb#gdb#Let('GdbQuitOnProgramFinish', 0)
 call gdb#gdb#Let('GdbLogging', 0)
 call gdb#gdb#Let('GdbCmd', 'gdb')
+" }}}
 
-" ==============================================================================
-" Script local variables
-" ============================================================================== 
+" Script local variables {{{
 let s:userIsBusy = 0
 let s:gdbStarted = 0
 let s:scriptDir = expand('<sfile>:p:h')
@@ -48,6 +44,11 @@ let s:gdbNametoBufNumMap = {}
 
 let s:userMappings = {}
 
+let s:bpsForThisSign = {}
+let s:signIdToBpNumMap = {}
+" }}}
+
+" Startup tasks and window management  {{{
 " s:GdbInitWork: does the actual work of initialization {{{
 " Description: 
 function! s:GdbInitWork( )
@@ -103,6 +104,7 @@ function! s:GdbInitWork( )
             call gdb#gdb#RunCommand('file '.gdbFile)
         endif
     endif
+    call gdb#gdb#RedoAllBreakpoints()
 
     augroup TerminateGdb
         au!
@@ -225,11 +227,6 @@ function! s:RestoreUserMaps()
         au!
     augroup END
 endfunction " }}}
-" s:CreateEofSignForBuffer:  {{{
-" Description: 
-function! s:CreateEofSignForBuffer()
-    <+function body+>
-endfunction " }}}
 " gdb#gdb#CreateEofSign:  {{{
 " Description: 
 function! gdb#gdb#CreateEofSign()
@@ -248,7 +245,7 @@ endfunction " }}}
 " Description: 
 function! s:CreateGdbMaps()
     call s:CreateMap('<C-c>',   ':call gdb#gdb#Interrupt()<CR>', 'n')
-    call s:CreateMap('<F5>',    ':call gdb#gdb#Continue()<CR>', 'n')
+    call s:CreateMap('<F5>',    ':call gdb#gdb#RunOrContinue()<CR>', 'n')
     call s:CreateMap('<S-F5>',  ':call gdb#gdb#Kill()<CR>', 'n')
     call s:CreateMap('<F6>',    ':call gdb#gdb#Kill()<CR>', 'n')
     call s:CreateMap('<F10>',   ':call gdb#gdb#Next()<CR>', 'n')
@@ -292,10 +289,9 @@ function! gdb#gdb#ShowCmdWindow()
     let s:GdbCmdWinBufNum = gdb#gdb#GdbOpenWindow(s:GdbCmdWinName)
     setlocal filetype=gdbvim
 endfunction " }}}
+" }}}
 
-" ==============================================================================
-" Updating the _GDB_ window dynamically.
-" ============================================================================== 
+" Updating the _GDB_ window dynamically. {{{
 " gdb#gdb#IsUserBusy: returns 1 if cursor moved etc. {{{
 " Description: 
 function! gdb#gdb#IsUserBusy()
@@ -371,10 +367,9 @@ function! gdb#gdb#GetQueryAnswer(query)
         return 'n'
     endif
 endfunction " }}}
+" }}}
 
-" ==============================================================================
-" Miscellaneous GDB commands
-" ============================================================================== 
+" Miscellaneous GDB commands {{{
 " s:GdbGetCommandOutputSilent: gets the output of the command {{{
 " Description: 
 function! s:GdbGetCommandOutputSilent(cmd)
@@ -490,10 +485,15 @@ endfunction " }}}
 function! gdb#gdb#RunOrResume(arg)
     if a:arg =~ '^start$'
         call gdb#gdb#Init()
-    elseif a:arg =~ '^\(r\%[un]\|re\%[turn]\|co\%[ntinue]\|fi\%[nish]\|st\%[epi]\|ne\%[xti]\)\>'
+    elseif a:arg =~ '^\(r\%[un]\)'
+        " Sync all breakpoints from the file. This is especially important
+        " if the user is recompiling the file and rerunning in an existing
+        " GDB session. Otherwise, where GDB has its breakpoints and where
+        " vim is displaying the breakpoint can go wildly out of sync.
+        call gdb#gdb#RedoAllBreakpoints()
         call gdb#gdb#ResumeProgram(a:arg)
     else
-        call gdb#gdb#RunCommand(a:arg)
+        call gdb#gdb#ResumeProgram(a:arg)
     endif
 endfunction " }}}
 " gdb#gdb#SetQueryAnswer: sets an answer for future queries {{{
@@ -505,10 +505,9 @@ function! gdb#gdb#SetQueryAnswer(ans)
         exec 'py gdbClient.queryAnswer = None'
     endif
 endfunction " }}}
+" }}}
 
-" ==============================================================================
-" Stack manipulation and information
-" ============================================================================== 
+" Stack manipulation and information {{{
 " gdb#gdb#GotoCurFrame: places cursor at current frame {{{
 " Description: 
 function! gdb#gdb#GotoCurFrame()
@@ -627,10 +626,9 @@ function! gdb#gdb#RefreshStackPtr(stackNum)
         exec 'silent! % s/^ \(\s*#'.a:stackNum.'\)\>/>\1/e'
     endif 
 endfunction " }}}
+" }}}
 
-" ==============================================================================
-" Break-point stuff.
-" ============================================================================== 
+" Break-point stuff. {{{
 " gdb#gdb#SetBreakPoint: {{{
 
 let s:numBreakPoints = 0
@@ -639,15 +637,16 @@ exec 'sign define gdbBreakPoint text=!! icon='.s:scriptDir.'/bp.png texthl=Error
 function! gdb#gdb#SetBreakPoint()
     call s:SetBreakPointAt(expand('%:p'), line('.'), gdb#gdb#GetAllBreakPoints())
 
-    let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
+    " let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
 endfunction " }}}
 " s:SetBreakPointAt: sets breakpoint at (file, line) {{{
 " Description: 
-function! s:SetBreakPointAt(fname, lnum, prevBps)
+function! s:SetBreakPointAt(fname, lnum, prevbps)
     " To fix very strange problem with setting breakpoints in files on
     " network drives.
     let fnameTail = fnamemodify(a:fname, ':t')
     
+    let gdbBpNum = -1
     if s:gdbStarted
         if s:GdbWarnIfBusy()
             return
@@ -656,33 +655,69 @@ function! s:SetBreakPointAt(fname, lnum, prevBps)
         let output = s:GdbGetCommandOutput('break '.fnameTail.':'.a:lnum)
         if output !~ 'Breakpoint \d\+'
             return
+        else
+            let gdbBpNum = matchstr(output, 'Breakpoint \zs\d\+\ze')
         endif
     end
 
-    let lnum = line('.')
-    let spec = 'line='.a:lnum.' file='.a:fname
-    let idx = index(a:prevBps, spec)
-    if idx < 0
+    let signId = s:GetSignIdForFileLine(a:fname, a:lnum, a:prevbps)
+
+    " Do not place multiple signs in exactly the same location. That can
+    " get really weird at breakpoint deletion time.
+    if signId == 0
         let signId = (1024+s:numBreakPoints)
 
-        " FIXME: Should do this only if a sign is already not placed at
-        " this location.
+        let spec = 'line='.a:lnum.' file='.a:fname
         exec 'sign place '.signId.' name=gdbBreakPoint '.spec
         let s:numBreakPoints += 1
     endif
+
+    " Remember what GDB breakpoint corresponds to this sign Id.
+    if gdbBpNum > 0
+        let bpsForThisSign = get(s:signIdToBpNumMap, signId, [])
+        let bpsForThisSign += [gdbBpNum]
+        let s:signIdToBpNumMap[signId] = bpsForThisSign
+    endif
+
+endfunction " }}}
+" s:GetSignIdForFileLine: {{{
+" Description: 
+function! s:GetSignIdForFileLine(file, line, ...)
+    if a:0 > 0
+        let prevbps = a:1
+    else
+        let prevbps = gdb#gdb#GetAllBreakPoints()
+    endif
+
+    for bp in prevbps
+        if bp.file == a:file && bp.line == a:line
+            return bp.id
+        endif
+    endfor
+    return 0
 endfunction " }}}
 " gdb#gdb#ClearBreakPoint: clears break point {{{
 " Description:  
 function! gdb#gdb#ClearBreakPoint()
+    " Find out all the GDB breakpoints associated with this sign and
+    " delete it.
+    let signId = s:GetSignIdForFileLine(expand('%:p'), line('.'))
+    echomsg "removing sign ".signId
+
     if s:gdbStarted == 1
         if s:GdbWarnIfBusy()
             return
         endif
-        " ask GDB to clear breakpoints here.
-        call gdb#gdb#RunCommand('clear '.expand('%:p:t').':'.line('.'))
-    endif
 
-    let spec = 'line='.line('.').' file='.expand('%:p')
+        if signId > 0
+            let breakpoints = s:signIdToBpNumMap[signId]
+
+            for bp in breakpoints
+                call gdb#gdb#RunCommand('del '.bp)
+            endfor
+
+        endif
+    endif
 
     while 1
         let again = 0
@@ -697,7 +732,9 @@ function! gdb#gdb#ClearBreakPoint()
         endtry
     endwhile
 
-    let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
+    let s:signIdToBpNumMap[signId] = []
+
+    " let g:GdbBreakPoints = join(gdb#gdb#GetAllBreakPoints(), "\n")
 endfunction " }}}
 " gdb#gdb#GetAllBreakPoints: gets all breakpoints set by us {{{
 " Description: 
@@ -712,8 +749,13 @@ function! gdb#gdb#GetAllBreakPoints()
             let fname = fnamemodify(fname, ':p')
         endif
         if line =~ 'name=gdbBreakPoint'
-            let lnum = matchstr(line, 'line=\zs\d\+\ze')
-            let bps += ['line='.lnum.' file='.fname]
+            let match = matchlist(line, 'line=\(\d\+\)\s\+id=\(\d\+\)')
+
+            let bpinfo = {}
+            let bpinfo.line = match[1]
+            let bpinfo.file = fname
+            let bpinfo.id = match[2]
+            let bps += [bpinfo]
         endif
     endfor
 
@@ -723,12 +765,10 @@ endfunction " }}}
 " Description: 
 function! gdb#gdb#RedoAllBreakpoints()
     call gdb#gdb#SetQueryAnswer('y')
+    call gdb#gdb#RunCommand('delete')
     let breakPoints = gdb#gdb#GetAllBreakPoints()
     for bp in breakPoints
-        let items = matchlist(bp, 'line=\(\d\+\) file=\(.*\)')
-        let line = items[1]
-        let fname = items[2]
-        call s:SetBreakPointAt(fname, line, breakPoints)
+        call s:SetBreakPointAt(bp.file, bp.line, breakPoints)
     endfor
     call gdb#gdb#SetQueryAnswer('')
 endfunction " }}}
@@ -765,10 +805,9 @@ function! gdb#gdb#RestoreSessionBreakPoints()
         endfor
     endif
 endfunction " }}}
+" }}}  
 
-" ==============================================================================
-" Program execution, stepping, continuing etc.
-" ============================================================================== 
+" Program execution, stepping, continuing etc. {{{
 " gdb#gdb#Attach: attach to a running program {{{
 " Description: 
 " s:GetPidFromName: gets the PID from the name of a program {{{
@@ -843,7 +882,6 @@ function! gdb#gdb#Attach(pid)
         call s:GdbInitWork()
     endif
     call gdb#gdb#RunCommand('attach '.pid)
-    call gdb#gdb#RedoAllBreakpoints()
 endfunction " }}}
 " gdb#gdb#ResumeProgram: gives control back to the inferior program {{{
 " Description: This should be used for GDB commands which could potentially
@@ -936,10 +974,9 @@ function! gdb#gdb#Kill()
         call gdb#gdb#OnResume()
     endif
 endfunction " }}}
+" }}}
 
-" ==============================================================================
-" Balloon expression
-" ============================================================================== 
+" Balloon expression {{{
 " gdb#gdb#BalloonExpr: balloonexpr for GDB {{{
 function! gdb#gdb#BalloonExpr()
     if gdb#gdb#IsBusy()
@@ -986,10 +1023,9 @@ function! s:GetContingString(bufnr, lnum, col)
     let matchtxt = pretxt.posttxt
     return matchtxt
 endfunction " }}}
+" }}}
 
-" ==============================================================================
-" Variable watching and expansion
-" ============================================================================== 
+" Variable watching and expansion {{{
 " gdb#gdb#OpenGdbVarsWindow:  {{{
 " Description: 
 let s:GdbVarWinBufNum = -1
@@ -1093,10 +1129,9 @@ function! gdb#gdb#DeleteGdbVar(wholeTree)
     " then delete the current line.
     . d _
 endfunction " }}}
+" }}}
 
-" ==============================================================================
-" utils
-" ============================================================================== 
+" utils {{{
 " gdb#gdb#GetLocal: returns a local variable {{{
 " Description:  
 function! gdb#gdb#GetLocal(varname)
@@ -1168,5 +1203,6 @@ endfunction " }}}
 function! gdb#gdb#GetVar(varName)
     return s:{a:varName}
 endfunction " }}}
+" }}}
 
 " vim: fdm=marker
